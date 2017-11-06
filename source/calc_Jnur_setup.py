@@ -7,9 +7,9 @@ import numpy
 #lib_mpf_dir = "/u/rcooke/local/lib/"
 
 ext = Extension("calc_Jnur", ["calc_Jnur.pyx"],
-	include_dirs=[numpy.get_include()]
+    include_dirs=[numpy.get_include()]
 )
 
 setup(ext_modules=[ext],
-		cmdclass = {'build_ext': build_ext})
+        cmdclass = {'build_ext': build_ext})
 

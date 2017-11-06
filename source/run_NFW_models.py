@@ -46,65 +46,65 @@ baryfrac = np.interp(virialm, halomass, baryfracvals)
 convergence=False
 
 if convergence:
-	nmu = [30, 90, 180]
-	nrad = [500, 1000, 2000]
-	for r in range(len(nrad)):
-		for mu in range(len(nmu)):
-			# Set the options dictionary
-			options = getoptions.default()
-			# Overwrite the defaults
-			options["run"]["nsample"]  = nrad[r]
-			options["run"]["ncpus"]    = -1
-			options["run"]["nummu"]    = nmu[mu]
-			options["geometry"]["use"] = "NFW"
-			options["HMscale"] = 1.0
-			options["radfield"] = "HM12"
-			#options["radfield"] = "PLm1d5_IPm6"
+    nmu = [30, 90, 180]
+    nrad = [500, 1000, 2000]
+    for r in range(len(nrad)):
+        for mu in range(len(nmu)):
+            # Set the options dictionary
+            options = getoptions.default()
+            # Overwrite the defaults
+            options["run"]["nsample"]  = nrad[r]
+            options["run"]["ncpus"]    = -1
+            options["run"]["nummu"]    = nmu[mu]
+            options["geometry"]["use"] = "NFW"
+            options["HMscale"] = 1.0
+            options["radfield"] = "HM12"
+            #options["radfield"] = "PLm1d5_IPm6"
 
-			# Get the working cosmology
-			cosmopar = cosmo.get_cosmo()
+            # Get the working cosmology
+            cosmopar = cosmo.get_cosmo()
 
-			for i in range(nummvir):
-				for j in range(numreds):
-					print "#########################"
-					print "#########################"
-					print "  virialm  {0:d}/{1:d}".format(i+1,nummvir)
-					print "  redshift {0:d}/{1:d}".format(j+1,numreds)
-					print "#########################"
-					print "#########################"
-					for k in range(numbary):
-						options["geometry"]["NFW"] = [10.0**virialm[i],10.0,10.0**baryfrac[k]]
-						function_NFW.get_halo(redshift[j],gastemp,bturb,metals=metals,cosmopar=cosmopar,ions=ions,options=options)
+            for i in range(nummvir):
+                for j in range(numreds):
+                    print "#########################"
+                    print "#########################"
+                    print "  virialm  {0:d}/{1:d}".format(i+1,nummvir)
+                    print "  redshift {0:d}/{1:d}".format(j+1,numreds)
+                    print "#########################"
+                    print "#########################"
+                    for k in range(numbary):
+                        options["geometry"]["NFW"] = [10.0**virialm[i],10.0,10.0**baryfrac[k]]
+                        function_NFW.get_halo(redshift[j],gastemp,bturb,metals=metals,cosmopar=cosmopar,ions=ions,options=options)
 else:
-	# Set the options dictionary
-	options = getoptions.default()
-	# Overwrite the defaults
-	options["run"]["nsample"]  = 1000
-	options["run"]["ncpus"]    = -1
-	options["run"]["nummu"]    = 30
-	options["geometry"]["use"] = "NFW"
-	options["HMscale"] = 1.0
-	options["radfield"] = "HM12"
-	#options["radfield"] = "PLm1d5_IPm6"
+    # Set the options dictionary
+    options = getoptions.default()
+    # Overwrite the defaults
+    options["run"]["nsample"]  = 1000
+    options["run"]["ncpus"]    = -1
+    options["run"]["nummu"]    = 30
+    options["geometry"]["use"] = "NFW"
+    options["HMscale"] = 1.0
+    options["radfield"] = "HM12"
+    #options["radfield"] = "PLm1d5_IPm6"
 
-	# Get the working cosmology
-	cosmopar = cosmo.get_cosmo()
+    # Get the working cosmology
+    cosmopar = cosmo.get_cosmo()
 
-	for i in range(nummvir):
-		for j in range(numreds):
-			print "#########################"
-			print "#########################"
-			print "  virialm  {0:d}/{1:d}".format(i+1,nummvir)
-			print "  redshift {0:d}/{1:d}".format(j+1,numreds)
-			print "#########################"
-			print "#########################"
-			for k in range(numbary):
-				#options["geometry"]["NFW"] = [10.0**virialm[i],1.0,10.0**baryfrac[k]]
-				options["geometry"]["NFW"] = [10.0**virialm[i],1.0,baryfrac[i]]
-				options["HMscale"] = 1.0
-				#options["HMscale"] = HMscale[k]
-				options["run"]["concrit"] = 1.0E-3
-				options["run"]["maxiter"] = 500
-				function_NFW.get_halo(redshift[j],gastemp,bturb,Hescale=HMscale[k],metals=metals,cosmopar=cosmopar,ions=ions,options=options)
-				#function_NFW.get_halo(redshift[j],gastemp,bturb,Hescale=1.0,metals=metals,cosmopar=cosmopar,ions=ions,options=options)
+    for i in range(nummvir):
+        for j in range(numreds):
+            print "#########################"
+            print "#########################"
+            print "  virialm  {0:d}/{1:d}".format(i+1,nummvir)
+            print "  redshift {0:d}/{1:d}".format(j+1,numreds)
+            print "#########################"
+            print "#########################"
+            for k in range(numbary):
+                #options["geometry"]["NFW"] = [10.0**virialm[i],1.0,10.0**baryfrac[k]]
+                options["geometry"]["NFW"] = [10.0**virialm[i],1.0,baryfrac[i]]
+                options["HMscale"] = 1.0
+                #options["HMscale"] = HMscale[k]
+                options["run"]["concrit"] = 1.0E-3
+                options["run"]["maxiter"] = 500
+                function_NFW.get_halo(redshift[j],gastemp,bturb,Hescale=HMscale[k],metals=metals,cosmopar=cosmopar,ions=ions,options=options)
+                #function_NFW.get_halo(redshift[j],gastemp,bturb,Hescale=1.0,metals=metals,cosmopar=cosmopar,ions=ions,options=options)
 

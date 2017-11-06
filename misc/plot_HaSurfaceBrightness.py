@@ -20,8 +20,8 @@ idx = dict({})
 idx["voldens"] = dict({})
 idx["coldens"] = dict({})
 for i in range((numarr-strt)/2):
-	idx["voldens"][ions[i]] = strt + i
-	idx["coldens"][ions[i]] = strt + i + (numarr-strt)/2
+    idx["voldens"][ions[i]] = strt + i
+    idx["coldens"][ions[i]] = strt + i + (numarr-strt)/2
 
 # Extract radius information
 radius = data[:,0]

@@ -38,12 +38,12 @@ gastemp = np.linspace(mn_gast,mx_gast,numgast)
 #print gastemp
 
 for i in range(nummvir):
-	for j in range(numreds):
-		print "#########################"
-		print "#########################"
-		print "  virialm  {0:d}/{1:d}".format(i+1,nummvir)
-		print "  redshift {0:d}/{1:d}".format(j+1,numreds)
-		print "#########################"
-		print "#########################"
-		for k in range(numgast):
-			function_Cored.get_halo(10.0**virialm[i],redshift[j],gastemp[k],acore=acore)
+    for j in range(numreds):
+        print "#########################"
+        print "#########################"
+        print "  virialm  {0:d}/{1:d}".format(i+1,nummvir)
+        print "  redshift {0:d}/{1:d}".format(j+1,numreds)
+        print "#########################"
+        print "#########################"
+        for k in range(numgast):
+            function_Cored.get_halo(10.0**virialm[i],redshift[j],gastemp[k],acore=acore)

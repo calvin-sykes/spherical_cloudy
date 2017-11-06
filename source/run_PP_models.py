@@ -32,16 +32,16 @@ density = np.linspace(mn_dens,mx_dens,numdens)
 cosmopar = cosmo.get_cosmo()
 
 for d in range(numdens):
-	#radius = 3.24/(10.0**density[d])  # 3.24 = 3.24E-22*1.0E21 = cm_to_kpc * total H column density
-	radius = 0.6/(10.0**density[d])
-	options["geometry"]["PP"] = [density[d],radius]
-	print "#########################"
-	print "#########################"
-	print "  density  {0:d}/{1:d}".format(d+1,numdens)
-	print "  radius  {0:.4f}".format(radius)
-	print "#########################"
-	print "#########################"
-	function_NFW.get_halo(3.0,gastemp,bturb,metals=metals,cosmopar=cosmopar,ions=ions,options=options)
+    #radius = 3.24/(10.0**density[d])  # 3.24 = 3.24E-22*1.0E21 = cm_to_kpc * total H column density
+    radius = 0.6/(10.0**density[d])
+    options["geometry"]["PP"] = [density[d],radius]
+    print "#########################"
+    print "#########################"
+    print "  density  {0:d}/{1:d}".format(d+1,numdens)
+    print "  radius  {0:.4f}".format(radius)
+    print "#########################"
+    print "#########################"
+    function_NFW.get_halo(3.0,gastemp,bturb,metals=metals,cosmopar=cosmopar,ions=ions,options=options)
 
 
 

@@ -18,10 +18,10 @@ normalize = mcolors.Normalize(vmin=dens.min(), vmax=dens.max())
 ndens = 4
 #ndens = dens.size
 for i in range(len(labels)):
-	plt.subplot(7,7,i+1)
-	plt.title(labels[i])
-	for d in range(ndens):
-		plt.plot(temp, datarsh[d,:,2+i], color=colormap(normalize(dens[d])))
+    plt.subplot(7,7,i+1)
+    plt.title(labels[i])
+    for d in range(ndens):
+        plt.plot(temp, datarsh[d,:,2+i], color=colormap(normalize(dens[d])))
 #plt.colorbar()
 #plt.show()
 
@@ -29,10 +29,10 @@ plt.clf()
 normalize = mcolors.Normalize(vmin=0, vmax=len(labels)-1)
 mtemp = np.linspace(1000, 40000.0, 1000)
 for i in range(len(labels)):
-	coeff = np.polyfit(np.log10(temp), datarsh[0,:,2+i], 2)
-	model = np.polyval(coeff, np.log10(mtemp))
-	plt.plot(temp, datarsh[0,:,2+i], color=colormap(normalize(i)), label=labels[i])
-	plt.plot(mtemp, model, 'r--')
+    coeff = np.polyfit(np.log10(temp), datarsh[0,:,2+i], 2)
+    model = np.polyval(coeff, np.log10(mtemp))
+    plt.plot(temp, datarsh[0,:,2+i], color=colormap(normalize(i)), label=labels[i])
+    plt.plot(mtemp, model, 'r--')
 plt.legend()
 plt.show()
 
