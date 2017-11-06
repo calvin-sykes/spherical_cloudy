@@ -252,7 +252,7 @@ def get_halo(redshift,gastemp,bturb,metals=1.0,Hescale=1.0,cosmopar=np.array([0.
 		print "Virial radius (pc) = {0:E}".format(virialr*cmtopc)
 		print "Scale radius (pc) = {0:E}".format(rscale*cmtopc)
 
-	loadprev=True
+	loadprev=False
 	if loadprev:
 		if options["geometry"]["use"] == "NFW":
 			#mstring = ("{0:3.2f}".format(np.log10(options["geometry"]["NFW"][0])-0.01)).replace(".","d").replace("+","p")
@@ -1160,9 +1160,9 @@ def get_halo(redshift,gastemp,bturb,metals=1.0,Hescale=1.0,cosmopar=np.array([0.
 			hstring = ("Hescale{0:+3.2f}".format(Hescale)).replace(".","d").replace("+","p").replace("-","m")
 		elif options["radfield"][0:2]=="PL":
 			hstring = options["radfield"]
-		#outfname = "output/{0:s}_mass{1:s}_redshift{2:s}_baryscl{3:s}_{4:s}_{5:d}-{6:d}".format(useg,mstring,rstring,bstring,hstring,npts,nummu)
+		outfname = "output/{0:s}_mass{1:s}_redshift{2:s}_baryscl{3:s}_{4:s}_{5:d}-{6:d}".format(useg,mstring,rstring,bstring,hstring,npts,nummu)
 		#outfname = "convergence/{0:s}_mass{1:s}_redshift{2:s}_baryscl{3:s}_{4:s}_{5:d}-{6:d}".format(useg,mstring,rstring,bstring,hstring,npts,nummu)
-		outfname = "output_z0UVB/{0:s}_mass{1:s}_redshift{2:s}_{3:s}_{4:d}-{5:d}".format(useg,mstring,rstring,hstring,npts,nummu)
+		#outfname = "output_z0UVB/{0:s}_mass{1:s}_redshift{2:s}_{3:s}_{4:d}-{5:d}".format(useg,mstring,rstring,hstring,npts,nummu)
 		print "Saving file {0:s}.npy".format(outfname)
 		tmpout = np.concatenate((radius.reshape((npts,1))*cmtopc,prof_temperature.reshape((npts,1)),densitynH.reshape((npts,1)),HaSB.reshape((npts,1)),prof_density,prof_coldens),axis=1)
 		#np.save(outfname, np.transpose((radius,electrondensity,densitynH,prof_temperature,prof_pressure/kB,prof_YHI,prof_YHeI,prof_YHeII,prof_HIcolumndensity,prof_HeIcolumndensity,prof_HeIIcolumndensity,phionrate_HI,phionrate_HeI,phionrate_HeII,scdryrate_HI,scdryrate_HeI,B1_HeII,B2_HeI,B3_HI,B6_HeI,B7_HI)))
