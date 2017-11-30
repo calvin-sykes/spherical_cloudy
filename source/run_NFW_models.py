@@ -15,17 +15,17 @@ ions = ["H I", "D I", "He I", "He II"]
 
 gastemp = 20000.0
 
-mn_mvir = 9.63
-mx_mvir = 9.63
-nummvir = 1
+mn_mvir = 8.0 #9.63
+mx_mvir = 9.65 #9.63
+nummvir = 21
 
 mn_reds = 0.0
 mx_reds = 0.0
 numreds = 1
 
-mn_bary = 0.95
-mx_bary = 0.99
-numbary = 5
+mn_bary = 1.0
+mx_bary = 1.0
+numbary = 1
 #mx_bary = 0.0
 #numbary = 5
 
@@ -90,6 +90,7 @@ else:
     # Get the working cosmology
     cosmopar = cosmo.get_cosmo()
 
+    prev_fname = None
     for i in range(nummvir):
         for j in range(numreds):
             print "#########################"
@@ -105,6 +106,8 @@ else:
                 #options["HMscale"] = HMscale[k]
                 options["run"]["concrit"] = 1.0E-3
                 options["run"]["maxiter"] = 500
-                function_NFW.get_halo(redshift[j],gastemp,bturb,Hescale=HMscale[k],metals=metals,cosmopar=cosmopar,ions=ions,options=options)
-                #function_NFW.get_halo(redshift[j],gastemp,bturb,Hescale=1.0,metals=metals,cosmopar=cosmopar,ions=ions,options=options)
+                options["run"]["outdir"] = # PUT RUN NAME HERE
+                # get_halo returns the name of the file it writes the output to
+                # so that it can be passed back on the next loop iteration to use as an intitial solution
+                prev_fname = function_NFW.get_halo(redshift[j],gastemp,bturb,Hescale=HMscale[k],metals=metals,cosmopar=cosmopar,ions=ions,prevfile=prev_fname,options=options)
 

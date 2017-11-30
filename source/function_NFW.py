@@ -20,6 +20,7 @@ import misc
 import calc_Jnur
 import time
 import sys
+import os
 from multiprocessing import cpu_count as mpCPUCount
 from multiprocessing import Pool as mpPool
 from multiprocessing.pool import ApplyResult
@@ -98,7 +99,7 @@ def get_radius(virialr, scale, npts, method=0):
     return radius
 
 
-def get_halo(redshift,gastemp,bturb,metals=1.0,Hescale=1.0,cosmopar=np.array([0.673,0.04910,0.685,0.315]),ions=["H I", "He I", "He II"],options=None):
+def get_halo(redshift,gastemp,bturb,metals=1.0,Hescale=1.0,cosmopar=np.array([0.673,0.04910,0.685,0.315]),ions=["H I", "He I", "He II"],prevfile=None,options=None):
     """
     bturb     : turbulent Doppler parameter
     metals    : Scale the metals by a constant
@@ -252,28 +253,13 @@ def get_halo(redshift,gastemp,bturb,metals=1.0,Hescale=1.0,cosmopar=np.array([0.
         print "Virial radius (pc) = {0:E}".format(virialr*cmtopc)
         print "Scale radius (pc) = {0:E}".format(rscale*cmtopc)
 
-    loadprev=False
-    if loadprev:
+    # if string is passed, interpret as filename for the previous run
+    # this is used as an initial solution to speed up convergence
+    if prevfile is not None:
         if options["geometry"]["use"] == "NFW":
-            #mstring = ("{0:3.2f}".format(np.log10(options["geometry"]["NFW"][0])-0.01)).replace(".","d").replace("+","p")
-            mstring = ("{0:3.2f}".format(np.log10(options["geometry"]["NFW"][0]))).replace(".","d").replace("+","p")
-            rstring = ("{0:3.2f}".format(redshift)).replace(".","d").replace("+","p")
-            bstring = ("{0:+3.2f}".format(np.log10(options["geometry"]["NFW"][2]))).replace(".","d").replace("+","p").replace("-","m")
-            if options["radfield"]=="HM12":
-                hstring = ("HMscale{0:+3.2f}".format(np.log10(options["HMscale"]))).replace(".","d").replace("+","p").replace("-","m")
-                #hstring = ("HMscale{0:+3.2f}".format(np.log10(options["HMscale"]-0.1))).replace(".","d").replace("+","p").replace("-","m")
-                hstring = ("Hescale{0:+3.2f}".format(Hescale+0.01)).replace(".","d").replace("+","p").replace("-","m")
-                #hstring = ("Hescale{0:+3.2f}".format(1.0)).replace(".","d").replace("+","p").replace("-","m")
-            elif options["radfield"][0:2]=="PL":
-                hstring = options["radfield"]
-            #infname = "output/{0:s}_mass{1:s}_redshift{2:s}_baryscl{3:s}_{4:s}_500-180.npy".format("NFW",mstring,rstring,bstring,hstring)
-            #infname = "output/{0:s}_mass{1:s}_redshift{2:s}_baryscl{3:s}_{4:s}_{5:d}-{6:d}.npy".format("NFW",mstring,rstring,bstring,hstring,npts,nummu)
-            #infname = "convergence_Voronov97/{0:s}_mass{1:s}_redshift{2:s}_baryscl{3:s}_{4:s}_{5:d}-{6:d}.npy".format("NFW",mstring,rstring,bstring,hstring,npts,nummu)
-            #infname = "output_old/{0:s}_mass{1:s}_redshift{2:s}_baryscl{3:s}_{4:s}_{5:d}-{6:d}.npy".format("NFW",mstring,rstring,bstring,hstring,npts,nummu)
-            infname = "output_z0UVB/{0:s}_mass{1:s}_redshift{2:s}_{3:s}_{4:d}-{5:d}.npy".format("NFW",mstring,rstring,hstring,npts,nummu)
-            print "Loading file {0:s}".format(infname)
-            #print "ERROR: file not saved"
-            tdata = np.load(infname)
+            print "Loading file {0:s}".format(prevfile)
+            #print "ERROR: file not saved"  
+            tdata = np.load(prevfile)
             #####################
             #//
 #			ttdata = np.load(infname)
@@ -356,16 +342,9 @@ def get_halo(redshift,gastemp,bturb,metals=1.0,Hescale=1.0,cosmopar=np.array([0.
         elif options["geometry"]["use"] == "PP":
             print "Never needed this"
             assert(False)
-            dstring = ("{0:+3.2f}".format(options["geometry"]["PP"][0])).replace(".","d").replace("+","p").replace("-","m")
-            rstring = ("{0:4.2f}".format(options["geometry"]["PP"][1])).replace(".","d").replace("+","p")
-            if options["radfield"]=="HM12":
-                hstring = ("HMscale{0:+3.2f}".format(np.log10(options["HMscale"]))).replace(".","d").replace("+","p").replace("-","m")
-            elif options["radfield"][0:2]=="PL":
-                hstring = options["radfield"]
-            infname = "output/{0:s}_density{1:s}_radius{2:s}_{3:s}_1000.npy".format("PP",dstring,rstring,hstring)
-            print "Loading file {0:s}".format(infname)
-            #print "ERROR: file not saved"
-            tdata = np.load(infname)
+            print "Loading file {0:s}".format(prevfile)
+            #print "ERROR: file not saved"  
+            tdata = np.load(prevfile)
             numarr = tdata.shape[1]
             radius = np.linspace(0.0,virialr*options["geometry"]["NFW"][1],npts)
             prof_coldens = np.zeros((npts,nummu,nions))
@@ -1149,18 +1128,23 @@ def get_halo(redshift,gastemp,bturb,metals=1.0,Hescale=1.0,cosmopar=np.array([0.
     timeB = time.time()
     print "Test completed in {0:f} mins".format((timeB-timeA)/60.0)
 
-    # Save the results
+    # Check if the output directory exists
+    out_dir = 'output' + '/' + options["run"]["outdir"]
+    if not os.path.exists(out_dir):
+        os.makedirs(out_dir)
+
+    # Save the results        
     useg = options["geometry"]["use"]
     if useg == "NFW":
         mstring = ("{0:3.2f}".format(np.log10(options["geometry"][useg][0]))).replace(".","d").replace("+","p")
         rstring = ("{0:3.2f}".format(redshift)).replace(".","d").replace("+","p")
         bstring = ("{0:+3.2f}".format(np.log10(options["geometry"][useg][2]))).replace(".","d").replace("+","p").replace("-","m")
         if options["radfield"]=="HM12":
-            #hstring = ("HMscale{0:+3.2f}".format(np.log10(options["HMscale"]))).replace(".","d").replace("+","p").replace("-","m")
-            hstring = ("Hescale{0:+3.2f}".format(Hescale)).replace(".","d").replace("+","p").replace("-","m")
+            hstring = ("HMscale{0:+3.2f}".format(np.log10(options["HMscale"]))).replace(".","d").replace("+","p").replace("-","m")
+            #hstring = ("Hescale{0:+3.2f}".format(Hescale)).replace(".","d").replace("+","p").replace("-","m")
         elif options["radfield"][0:2]=="PL":
             hstring = options["radfield"]
-        outfname = "output/{0:s}_mass{1:s}_redshift{2:s}_baryscl{3:s}_{4:s}_{5:d}-{6:d}".format(useg,mstring,rstring,bstring,hstring,npts,nummu)
+        outfname = out_dir + "/{0:s}_mass{1:s}_redshift{2:s}_baryscl{3:s}_{4:s}_{5:d}-{6:d}".format(useg,mstring,rstring,bstring,hstring,npts,nummu)
         #outfname = "convergence/{0:s}_mass{1:s}_redshift{2:s}_baryscl{3:s}_{4:s}_{5:d}-{6:d}".format(useg,mstring,rstring,bstring,hstring,npts,nummu)
         #outfname = "output_z0UVB/{0:s}_mass{1:s}_redshift{2:s}_{3:s}_{4:d}-{5:d}".format(useg,mstring,rstring,hstring,npts,nummu)
         print "Saving file {0:s}.npy".format(outfname)
@@ -1239,6 +1223,8 @@ def get_halo(redshift,gastemp,bturb,metals=1.0,Hescale=1.0,cosmopar=np.array([0.
         plt.plot(radius*cmtopc,np.log10(prof_coldens[:,elID["D I"][0]]/prof_coldens[:,elID["H I"][0]])-np.log10(elID["D I"][1]/elID["H I"][1]),'g-')
         plt.show()
         plt.clf()
+    # Return the output filename to be used as the input to the next iteration    
+    return outfname + '.npy'
 
 #jnurarr = calc_Jnur.Jnur(density, radius, jzero, phelxs_HI, nummu)
 #coldensHI, muarr = calc_Jnur.calc_coldens(density, radius, nummu)
