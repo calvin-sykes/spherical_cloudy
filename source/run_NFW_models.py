@@ -15,9 +15,10 @@ ions = ["H I", "D I", "He I", "He II"]
 
 gastemp = 20000.0
 
-mn_mvir = 9.63
-mx_mvir = 9.63
-nummvir = 1
+
+mn_mvir = 8.0
+mx_mvir = 9.65
+nummvir = 21
 
 mn_reds = 0.0
 mx_reds = 0.0
