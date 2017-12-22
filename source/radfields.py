@@ -53,8 +53,8 @@ def HMbackground(elID,redshift=3.0,options=None):
     Jnuadd = np.zeros(2*len(ekeys) + 2*7) # 7 additional points for secondary heat/ionizations
     nuadd  = np.zeros(2*len(ekeys) + 2*7) # 7 additional points for secondary heat/ionizations
     for i in range(len(ekeys)):
-        nup = (elID[ekeys[i]][2]+ediff)*elvolt/planck
-        num = (elID[ekeys[i]][2]-ediff)*elvolt/planck
+        nup = (elID[ekeys[i]].ip+ediff)*elvolt/planck
+        num = (elID[ekeys[i]].ip-ediff)*elvolt/planck
         Jnuvp = np.interp(nup,nurev,Jnurev)
         Jnuvm = np.interp(nup,nurev,Jnurev)
         nuadd[2*i]    = nup
@@ -67,8 +67,8 @@ def HMbackground(elID,redshift=3.0,options=None):
     extra = 28.0
     cntr = 2*len(ekeys)
     for i in range(len(ekeysA)):
-        nup = (elID[ekeysA[i]][2]+extra+ediff)*elvolt/planck
-        num = (elID[ekeysA[i]][2]+extra-ediff)*elvolt/planck
+        nup = (elID[ekeysA[i]].ip+extra+ediff)*elvolt/planck
+        num = (elID[ekeysA[i]].ip+extra-ediff)*elvolt/planck
         Jnuvp = np.interp(nup,nurev,Jnurev)
         Jnuvm = np.interp(nup,nurev,Jnurev)
         nuadd[2*i+cntr]    = nup
@@ -80,8 +80,8 @@ def HMbackground(elID,redshift=3.0,options=None):
     extra = 11.0
     cntr = 2*len(ekeys) + 2*4
     for i in range(len(ekeysB)):
-        nup = (elID[ekeysB[i]][2]+extra+ediff)*elvolt/planck
-        num = (elID[ekeysB[i]][2]+extra-ediff)*elvolt/planck
+        nup = (elID[ekeysB[i]].ip+extra+ediff)*elvolt/planck
+        num = (elID[ekeysB[i]].ip+extra-ediff)*elvolt/planck
         Jnuvp = np.interp(nup,nurev,Jnurev)
         Jnuvm = np.interp(nup,nurev,Jnurev)
         nuadd[2*i+cntr]    = nup
@@ -123,8 +123,8 @@ def powerlaw(elID,options=None):
     Jnuadd = np.zeros(2*len(ekeys) + 2*7) # 7 additional points for secondary heat/ionizations
     nuadd  = np.zeros(2*len(ekeys) + 2*7) # 7 additional points for secondary heat/ionizations
     for i in range(len(ekeys)):
-        nup = (elID[ekeys[i]][2]+ediff)*elvolt/planck
-        num = (elID[ekeys[i]][2]-ediff)*elvolt/planck
+        nup = (elID[ekeys[i]].ip+ediff)*elvolt/planck
+        num = (elID[ekeys[i]].ip-ediff)*elvolt/planck
         Jnuvp = np.interp(nup,nurev,Jnurev)
         Jnuvm = np.interp(nup,nurev,Jnurev)
         nuadd[2*i]    = nup
@@ -137,8 +137,8 @@ def powerlaw(elID,options=None):
     extra = 28.0
     cntr = 2*len(ekeys)
     for i in range(len(ekeysA)):
-        nup = (elID[ekeysA[i]][2]+extra+ediff)*elvolt/planck
-        num = (elID[ekeysA[i]][2]+extra-ediff)*elvolt/planck
+        nup = (elID[ekeysA[i]].ip+extra+ediff)*elvolt/planck
+        num = (elID[ekeysA[i]].ip+extra-ediff)*elvolt/planck
         Jnuvp = np.interp(nup,nurev,Jnurev)
         Jnuvm = np.interp(nup,nurev,Jnurev)
         nuadd[2*i+cntr]    = nup
@@ -150,8 +150,8 @@ def powerlaw(elID,options=None):
     extra = 11.0
     cntr = 2*len(ekeys) + 2*4
     for i in range(len(ekeysB)):
-        nup = (elID[ekeysB[i]][2]+extra+ediff)*elvolt/planck
-        num = (elID[ekeysB[i]][2]+extra-ediff)*elvolt/planck
+        nup = (elID[ekeysB[i]].ip+extra+ediff)*elvolt/planck
+        num = (elID[ekeysB[i]].ip+extra-ediff)*elvolt/planck
         Jnuvp = np.interp(nup,nurev,Jnurev)
         Jnuvm = np.interp(nup,nurev,Jnurev)
         nuadd[2*i+cntr]    = nup
@@ -179,8 +179,8 @@ def test_background(elID,options=None):
     Jnuadd = np.zeros(2*len(ekeys) + 2*7) # 7 additional points for secondary heat/ionizations
     nuadd  = np.zeros(2*len(ekeys) + 2*7) # 7 additional points for secondary heat/ionizations
     for i in range(len(ekeys)):
-        nup = (elID[ekeys[i]][2]+ediff)*elvolt/planck
-        num = (elID[ekeys[i]][2]-ediff)*elvolt/planck
+        nup = (elID[ekeys[i]].ip+ediff)*elvolt/planck
+        num = (elID[ekeys[i]].ip-ediff)*elvolt/planck
         Jnuvp = np.interp(nup,nurev,Jnurev)
         Jnuvm = np.interp(nup,nurev,Jnurev)
         nuadd[2*i]    = nup
@@ -193,8 +193,8 @@ def test_background(elID,options=None):
     extra = 28.0
     cntr = 2*len(ekeys)
     for i in range(len(ekeysA)):
-        nup = (elID[ekeysA[i]][2]+extra+ediff)*elvolt/planck
-        num = (elID[ekeysA[i]][2]+extra-ediff)*elvolt/planck
+        nup = (elID[ekeysA[i]].ip+extra+ediff)*elvolt/planck
+        num = (elID[ekeysA[i]].ip+extra-ediff)*elvolt/planck
         Jnuvp = np.interp(nup,nurev,Jnurev)
         Jnuvm = np.interp(nup,nurev,Jnurev)
         nuadd[2*i+cntr]    = nup
@@ -206,8 +206,8 @@ def test_background(elID,options=None):
     extra = 11.0
     cntr = 2*len(ekeys) + 2*4
     for i in range(len(ekeysB)):
-        nup = (elID[ekeysB[i]][2]+extra+ediff)*elvolt/planck
-        num = (elID[ekeysB[i]][2]+extra-ediff)*elvolt/planck
+        nup = (elID[ekeysB[i]].ip+extra+ediff)*elvolt/planck
+        num = (elID[ekeysB[i]].ip+extra-ediff)*elvolt/planck
         Jnuvp = np.interp(nup,nurev,Jnurev)
         Jnuvm = np.interp(nup,nurev,Jnurev)
         nuadd[2*i+cntr]    = nup

@@ -149,9 +149,9 @@ def get_halo(redshift,gastemp,bturb,metals=1.0,Hescale=1.0,cosmopar=np.array([0.
 
     # Get the primordial number abundance of He relative to H
     if "He I" in ions:
-        prim_He = elID["He I"][1]*Hescale
+        prim_He = elID["He I"].abund*Hescale
     elif "He II" in ions:
-        prim_He = elID["He II"][1]*Hescale
+        prim_He = elID["He II"].abund*Hescale
     else:
         print "ERROR :: You must include ""He I"" and ""He II"" in your model"
         assert(False)
@@ -198,12 +198,12 @@ def get_halo(redshift,gastemp,bturb,metals=1.0,Hescale=1.0,cosmopar=np.array([0.
     #	phhtxs[:,j] = xsecv.copy()
     # These are the same thing.
     #phelxs = phhtxs.copy()
-    #plt.plot(np.log10(engy),phelxs[:,elID["H I"][0]],'r-')
-    #plt.plot(np.log10(engy),phhtxs[:,elID["H I"][0]],'r-')
-    #plt.plot(np.log10(engy),phelxs[:,elID["He I"][0]],'g-')
-    #plt.plot(np.log10(engy),phhtxs[:,elID["He I"][0]],'g--')
-    #plt.plot(np.log10(engy),phelxs[:,elID["He II"][0]],'b-')
-    #plt.plot(np.log10(engy),phhtxs[:,elID["He II"][0]],'b--')
+    #plt.plot(np.log10(engy),phelxs[:,elID["H I"].id],'r-')
+    #plt.plot(np.log10(engy),phhtxs[:,elID["H I"].id],'r-')
+    #plt.plot(np.log10(engy),phelxs[:,elID["He I"].id],'g-')
+    #plt.plot(np.log10(engy),phhtxs[:,elID["He I"].id],'g--')
+    #plt.plot(np.log10(engy),phelxs[:,elID["He II"].id],'b-')
+    #plt.plot(np.log10(engy),phhtxs[:,elID["He II"].id],'b--')
     #plt.show()
 
     print "Loading radiative recombination coefficients"
@@ -298,7 +298,7 @@ def get_halo(redshift,gastemp,bturb,metals=1.0,Hescale=1.0,cosmopar=np.array([0.
             if interpit:
                 print "WARNING -- Interpolating by density weighting"
                 wght = np.sqrt(tdata[:,arridx["voldens"]["He II"]].copy())
-                wght /= (tdata[:,2].copy() * elID["He II"][1])
+                wght /= (tdata[:,2].copy() * elID["He II"].abund)
                 wght /= np.sum(wght)
 # 				plt.subplot(311)
 # 				plt.plot(old_radius, NHI, 'k-')
@@ -339,7 +339,7 @@ def get_halo(redshift,gastemp,bturb,metals=1.0,Hescale=1.0,cosmopar=np.array([0.
                     prof_density[:,j] = func(radius)
                 else:
                     prof_density[:,j] = tdata[:,arridx["voldens"][ions[j]]]
-                Yprofs[:,j] = prof_density[:,j] / (temp_densitynH * elID[ions[j]][1])
+                Yprofs[:,j] = prof_density[:,j] / (temp_densitynH * elID[ions[j]].abund)
     #		prof_YHI   = tdata[:,5]
     #		prof_YHeI  = tdata[:,6]
     #		prof_YHeII = tdata[:,7]
@@ -369,7 +369,7 @@ def get_halo(redshift,gastemp,bturb,metals=1.0,Hescale=1.0,cosmopar=np.array([0.
             for j in range(nions):
                 # density of this specie = unionized fraction * H volume density * number abundance relative to H
                 prof_density[:,j] = tdata[:,arridx["voldens"][ions[j]]]
-                Yprofs[:,j] = prof_density[:,j] / (temp_densitynH * elID[ions[j]][1])
+                Yprofs[:,j] = prof_density[:,j] / (temp_densitynH * elID[ions[j]].abund)
     #		prof_YHI   = tdata[:,5]
     #		prof_YHeI  = tdata[:,6]
     #		prof_YHeII = tdata[:,7]
@@ -465,7 +465,7 @@ def get_halo(redshift,gastemp,bturb,metals=1.0,Hescale=1.0,cosmopar=np.array([0.
             istore = 0
 
         # Calculate the pressure profile
-        dof = (2.0-Yprofs[:,elID["H I"][0]]) + prim_He*(3.0 - 2.0*Yprofs[:,elID["He I"][0]] - 1.0*Yprofs[:,elID["He II"][0]])
+        dof = (2.0-Yprofs[:,elID["H I"].id]) + prim_He*(3.0 - 2.0*Yprofs[:,elID["He I"].id] - 1.0*Yprofs[:,elID["He II"].id])
         masspp = (1.0 + 4.0*prim_He)/dof
         if options["geometry"]["use"] == "NFW":
             fgas = calc_Jnur.fgasx(densitym,radius,rscale)
@@ -513,17 +513,17 @@ def get_halo(redshift,gastemp,bturb,metals=1.0,Hescale=1.0,cosmopar=np.array([0.
         # Update the volume density of the unionized species
         for j in range(nions):
             # density of this specie = unionized fraction * H volume density * number abundance relative to H
-            prof_density[:,j] = Yprofs[:,j] * densitynH * elID[ions[j]][1]
+            prof_density[:,j] = Yprofs[:,j] * densitynH * elID[ions[j]].abund
 
         # Compute the electron density
-        electrondensity = densitynH * ( (1.0-Yprofs[:,elID["H I"][0]]) + prim_He*Yprofs[:,elID["He II"][0]] + 2.0*prim_He*(1.0-Yprofs[:,elID["He I"][0]]-Yprofs[:,elID["He II"][0]]) )
+        electrondensity = densitynH * ( (1.0-Yprofs[:,elID["H I"].id]) + prim_He*Yprofs[:,elID["He II"].id] + 2.0*prim_He*(1.0-Yprofs[:,elID["He I"].id]-Yprofs[:,elID["He II"].id]) )
 
         #plt.plot(np.log10(radius*cmtopc),electrondensity,'k-')
         #plt.show()
         #plt.clf()
-        #plt.plot(np.log10(radius*cmtopc),np.log10(prof_density[:,elID["H I"][0]]),'r-')
-        #plt.plot(np.log10(radius*cmtopc),np.log10(prof_density[:,elID["He I"][0]]),'g-')
-        #plt.plot(np.log10(radius*cmtopc),np.log10(prof_density[:,elID["He II"][0]]),'b-')
+        #plt.plot(np.log10(radius*cmtopc),np.log10(prof_density[:,elID["H I"].id]),'r-')
+        #plt.plot(np.log10(radius*cmtopc),np.log10(prof_density[:,elID["He I"].id]),'g-')
+        #plt.plot(np.log10(radius*cmtopc),np.log10(prof_density[:,elID["He II"].id]),'b-')
         #plt.show()
         #plt.clf()
 
@@ -574,9 +574,9 @@ def get_halo(redshift,gastemp,bturb,metals=1.0,Hescale=1.0,cosmopar=np.array([0.
         elif options["geometry"]["use"] == "PP":
             jnurarr = calc_Jnur.nint_pp(prof_coldens, phelxs, jzero)
 
-        #plt.plot(np.log10(radius*cmtopc),np.log10(prof_coldens[:,elID["H I"][0]]),'r-')
-        #plt.plot(np.log10(radius*cmtopc),np.log10(prof_coldens[:,elID["He I"][0]]),'g-')
-        #plt.plot(np.log10(radius*cmtopc),np.log10(prof_coldens[:,elID["He II"][0]]),'b-')
+        #plt.plot(np.log10(radius*cmtopc),np.log10(prof_coldens[:,elID["H I"].id]),'r-')
+        #plt.plot(np.log10(radius*cmtopc),np.log10(prof_coldens[:,elID["He I"].id]),'g-')
+        #plt.plot(np.log10(radius*cmtopc),np.log10(prof_coldens[:,elID["He II"].id]),'b-')
         #plt.show()
         #plt.clf()
 
@@ -621,9 +621,9 @@ def get_halo(redshift,gastemp,bturb,metals=1.0,Hescale=1.0,cosmopar=np.array([0.
         # TEST PLOT #
         #############
         #print "phionrate!"
-        #plt.plot(np.arange(npts),prof_colion[:,elID["H I"][0]],'r-')
-        #plt.plot(np.arange(npts),prof_colion[:,elID["He I"][0]],'g-')
-        #plt.plot(np.arange(npts),prof_colion[:,elID["He II"][0]],'b-')
+        #plt.plot(np.arange(npts),prof_colion[:,elID["H I"].id],'r-')
+        #plt.plot(np.arange(npts),prof_colion[:,elID["He I"].id],'g-')
+        #plt.plot(np.arange(npts),prof_colion[:,elID["He II"].id],'b-')
         #plt.show()
         #plt.clf()
         #############
@@ -632,29 +632,29 @@ def get_halo(redshift,gastemp,bturb,metals=1.0,Hescale=1.0,cosmopar=np.array([0.
         # the secondary photoelectron collisional ionization rates (probably not important for metals -- Section II, Shull & van Steenberg (1985))
         print "Performing numerical integration over frequency to get secondary photoelectron ionization"
         # Make sure there are no zero H I density
-        tmpcloneHI = prof_density[:,elID["H I"][0]].copy()
-        w = np.where(prof_density[:,elID["H I"][0]] == 0.0)
+        tmpcloneHI = prof_density[:,elID["H I"].id].copy()
+        w = np.where(prof_density[:,elID["H I"].id] == 0.0)
         if np.size(w[0]) != 0:
             print "WARNING :: n(H I) = exactly 0.0 in some zones, setting to smallest value"
             wb = np.where(tmpcloneHI!=0.0)
             tmpcloneHI[w] = np.min(tmpcloneHI[wb])
-            prof_density[:,elID["H I"][0]] = tmpcloneHI.copy()
-            prof_density[:,elID["D I"][0]] = tmpcloneHI.copy()*elID["D I"][1]
+            prof_density[:,elID["H I"].id] = tmpcloneHI.copy()
+            prof_density[:,elID["D I"].id] = tmpcloneHI.copy()*elID["D I"].abund
         prof_scdryrate = np.zeros((npts,nions))
 
         if ncpus > 1:
             async_results = []
             # H I
             async_results.append(pool.apply_async(calc_Jnur.scdryrate, (jnurarr, nuzero,
-                    phelxs[:,elID["H I"][0]], phelxs[:,elID["D I"][0]], phelxs[:,elID["He I"][0]], phelxs[:,elID["He II"][0]], # photoionisation cross-sections
-                    prof_density[:,elID["H I"][0]], prof_density[:,elID["D I"][0]], prof_density[:,elID["He I"][0]], prof_density[:,elID["He II"][0]], electrondensity/(densitynH*(1.0 + 2.0*prim_He)), # densities
-                    elID["H I"][2], elID["D I"][2], elID["He I"][2], elID["He II"][2], # ionisation potentials
+                    phelxs[:,elID["H I"].id], phelxs[:,elID["D I"].id], phelxs[:,elID["He I"].id], phelxs[:,elID["He II"].id], # photoionisation cross-sections
+                    prof_density[:,elID["H I"].id], prof_density[:,elID["D I"].id], prof_density[:,elID["He I"].id], prof_density[:,elID["He II"].id], electrondensity/(densitynH*(1.0 + 2.0*prim_He)), # densities
+                    elID["H I"].ip, elID["D I"].ip, elID["He I"].ip, elID["He II"].ip, # ionisation potentials
                     planck, elvolt, 0))) # constants
             # He I
             async_results.append(pool.apply_async(calc_Jnur.scdryrate, (jnurarr, nuzero,
-                    phelxs[:,elID["H I"][0]], phelxs[:,elID["D I"][0]], phelxs[:,elID["He I"][0]], phelxs[:,elID["He II"][0]], # photoionisation cross-sections
-                    prof_density[:,elID["H I"][0]], prof_density[:,elID["D I"][0]], prof_density[:,elID["He I"][0]], prof_density[:,elID["He II"][0]], electrondensity/(densitynH*(1.0 + 2.0*prim_He)), # densities
-                    elID["H I"][2], elID["D I"][2], elID["He I"][2], elID["He II"][2], # ionisation potentials
+                    phelxs[:,elID["H I"].id], phelxs[:,elID["D I"].id], phelxs[:,elID["He I"].id], phelxs[:,elID["He II"].id], # photoionisation cross-sections
+                    prof_density[:,elID["H I"].id], prof_density[:,elID["D I"].id], prof_density[:,elID["He I"].id], prof_density[:,elID["He II"].id], electrondensity/(densitynH*(1.0 + 2.0*prim_He)), # densities
+                    elID["H I"].ip, elID["D I"].ip, elID["He I"].ip, elID["He II"].ip, # ionisation potentials
                     planck, elvolt, 2))) # constants
             map(ApplyResult.wait, async_results)
 
@@ -668,28 +668,28 @@ def get_halo(redshift,gastemp,bturb,metals=1.0,Hescale=1.0,cosmopar=np.array([0.
         else:
             for j in range(nions):
                 if ions[j] == "H I":
-                    ratev = 4.0*np.pi * calc_Jnur.scdryrate(jnurarr, nuzero, phelxs[:,elID["H I"][0]], phelxs[:,elID["D I"][0]], phelxs[:,elID["He I"][0]], phelxs[:,elID["He II"][0]],
-                       prof_density[:,elID["H I"][0]], prof_density[:,elID["D I"][0]], prof_density[:,elID["He I"][0]], prof_density[:,elID["He II"][0]],
-                        electrondensity/(densitynH*(1.0 + 2.0*prim_He)), elID["H I"][2], elID["D I"][2], elID["He I"][2], elID["He II"][2], planck, elvolt, 0)
+                    ratev = 4.0*np.pi * calc_Jnur.scdryrate(jnurarr, nuzero, phelxs[:,elID["H I"].id], phelxs[:,elID["D I"].id], phelxs[:,elID["He I"].id], phelxs[:,elID["He II"].id],
+                       prof_density[:,elID["H I"].id], prof_density[:,elID["D I"].id], prof_density[:,elID["He I"].id], prof_density[:,elID["He II"].id],
+                        electrondensity/(densitynH*(1.0 + 2.0*prim_He)), elID["H I"].ip, elID["D I"].ip, elID["He I"].ip, elID["He II"].ip, planck, elvolt, 0)
                     prof_scdryrate[:,j] = ratev.copy()
 #		    	elif ions[j] == "D I":
-#		    		ratev = 4.0*np.pi * calc_Jnur.scdryrate(jnurarr, nuzero, phelxs[:,elID["H I"][0]], phelxs[:,elID["D I"][0]], phelxs[:,elID["He I"][0]], phelxs[:,elID["He II"][0]],
-#		    			prof_density[:,elID["H I"][0]], prof_density[:,elID["D I"][0]], prof_density[:,elID["He I"][0]], prof_density[:,elID["He II"][0]],
-#		    			electrondensity/(densitynH*(1.0 + 2.0*prim_He)), elID["H I"][2], elID["D I"][2], elID["He I"][2], elID["He II"][2], planck, elvolt, 1)
+#		    		ratev = 4.0*np.pi * calc_Jnur.scdryrate(jnurarr, nuzero, phelxs[:,elID["H I"].id], phelxs[:,elID["D I"].id], phelxs[:,elID["He I"].id], phelxs[:,elID["He II"].id],
+#		    			prof_density[:,elID["H I"].id], prof_density[:,elID["D I"].id], prof_density[:,elID["He I"].id], prof_density[:,elID["He II"].id],
+#		    			electrondensity/(densitynH*(1.0 + 2.0*prim_He)), elID["H I"].ip, elID["D I"].ip, elID["He I"].ip, elID["He II"].ip, planck, elvolt, 1)
 #		    		prof_scdryrate[:,j] = ratev.copy()
                 elif ions[j] == "He I":
-                    ratev = 4.0*np.pi * 10.0 * calc_Jnur.scdryrate(jnurarr, nuzero, phelxs[:,elID["H I"][0]], phelxs[:,elID["D I"][0]], phelxs[:,elID["He I"][0]], phelxs[:,elID["He II"][0]],
-                        prof_density[:,elID["H I"][0]], prof_density[:,elID["D I"][0]], prof_density[:,elID["He I"][0]], prof_density[:,elID["He II"][0]],
-                        electrondensity/(densitynH*(1.0 + 2.0*prim_He)), elID["H I"][2], elID["D I"][2], elID["He I"][2], elID["He II"][2], planck, elvolt, 2)
+                    ratev = 4.0*np.pi * 10.0 * calc_Jnur.scdryrate(jnurarr, nuzero, phelxs[:,elID["H I"].id], phelxs[:,elID["D I"].id], phelxs[:,elID["He I"].id], phelxs[:,elID["He II"].id],
+                        prof_density[:,elID["H I"].id], prof_density[:,elID["D I"].id], prof_density[:,elID["He I"].id], prof_density[:,elID["He II"].id],
+                        electrondensity/(densitynH*(1.0 + 2.0*prim_He)), elID["H I"].ip, elID["D I"].ip, elID["He I"].ip, elID["He II"].ip, planck, elvolt, 2)
                     prof_scdryrate[:,j] = ratev.copy()
 
         #############
         # TEST PLOT #
         #############
         #print "scdryrate!"
-        #plt.plot(np.arange(npts),prof_scdryrate[:,elID["H I"][0]],'r-')
-        #plt.plot(np.arange(npts),prof_scdryrate[:,elID["D I"][0]],'g-')
-        #plt.plot(np.arange(npts),prof_scdryrate[:,elID["He I"][0]],'b-')
+        #plt.plot(np.arange(npts),prof_scdryrate[:,elID["H I"].id],'r-')
+        #plt.plot(np.arange(npts),prof_scdryrate[:,elID["D I"].id],'g-')
+        #plt.plot(np.arange(npts),prof_scdryrate[:,elID["He I"].id],'b-')
         #plt.show()
         #plt.clf()
         #############
@@ -717,8 +717,8 @@ def get_halo(redshift,gastemp,bturb,metals=1.0,Hescale=1.0,cosmopar=np.array([0.
 
         # Calculate the charge transfer ionization rates
         print "Calculating charge transfer rates"
-        HIIdensity  = densitynH * (1.0-Yprofs[:,elID["H I"][0]])
-        HeIIdensity = densitynH * prim_He*Yprofs[:,elID["He II"][0]]
+        HIIdensity  = densitynH * (1.0-Yprofs[:,elID["H I"].id])
+        HeIIdensity = densitynH * prim_He*Yprofs[:,elID["He II"].id]
         HIIdensity = HIIdensity.reshape((npts,1)).repeat(nions,axis=1)
         HeIIdensity = HeIIdensity.reshape((npts,1)).repeat(nions,axis=1)
         prof_chrgtraniHII = np.zeros((npts,nions))
@@ -780,8 +780,8 @@ def get_halo(redshift,gastemp,bturb,metals=1.0,Hescale=1.0,cosmopar=np.array([0.
                 prof_recombCTHeI[:,j] = ratev.copy()
 
         edens_allions = electrondensity.reshape((npts,1)).repeat(nions,axis=1)
-        HIdensity = prof_density[:,elID["H I"][0]]
-        HeIdensity = prof_density[:,elID["He I"][0]]
+        HIdensity = prof_density[:,elID["H I"].id]
+        HeIdensity = prof_density[:,elID["He I"].id]
         HIdensity = HIdensity.reshape((npts,1)).repeat(nions,axis=1)
         HeIdensity = HeIdensity.reshape((npts,1)).repeat(nions,axis=1)
         prof_alpha = edens_allions*prof_recomb + HIdensity*prof_recombCTHI  + HeIdensity*prof_recombCTHeI
@@ -792,12 +792,12 @@ def get_halo(redshift,gastemp,bturb,metals=1.0,Hescale=1.0,cosmopar=np.array([0.
         # TEST PLOT #
         #############
         #print "rates before!"
-        #plt.plot(np.arange(npts),prof_recomb[:,elID["H I"][0]],'r-')
-        #plt.plot(np.arange(npts),prof_recomb[:,elID["He I"][0]],'g-')
-        #plt.plot(np.arange(npts),prof_recomb[:,elID["He II"][0]],'b-')
-        #plt.plot(np.arange(npts),prof_drecomb[:,elID["H I"][0]],'r--')
-        #plt.plot(np.arange(npts),prof_drecomb[:,elID["He I"][0]],'g--')
-        #plt.plot(np.arange(npts),prof_drecomb[:,elID["He II"][0]],'b--')
+        #plt.plot(np.arange(npts),prof_recomb[:,elID["H I"].id],'r-')
+        #plt.plot(np.arange(npts),prof_recomb[:,elID["He I"].id],'g-')
+        #plt.plot(np.arange(npts),prof_recomb[:,elID["He II"].id],'b-')
+        #plt.plot(np.arange(npts),prof_drecomb[:,elID["H I"].id],'r--')
+        #plt.plot(np.arange(npts),prof_drecomb[:,elID["He I"].id],'g--')
+        #plt.plot(np.arange(npts),prof_drecomb[:,elID["He II"].id],'b--')
         #plt.show()
         #plt.clf()
         #############
@@ -821,38 +821,38 @@ def get_halo(redshift,gastemp,bturb,metals=1.0,Hescale=1.0,cosmopar=np.array([0.
             #tstHeI  = (np.abs(tmp_prof_YHeI-prof_YHeI)<concrit).astype(np.int).sum()
             #tstHeII = (np.abs(tmp_prof_YHeII-prof_YHeII)<concrit).astype(np.int).sum()
             # Reset ne and the rates
-            electrondensity = densitynH * ( (1.0-Yprofs[:,elID["H I"][0]]) + prim_He*Yprofs[:,elID["He II"][0]] + 2.0*prim_He*(1.0-Yprofs[:,elID["He I"][0]]-Yprofs[:,elID["He II"][0]]) )
+            electrondensity = densitynH * ( (1.0-Yprofs[:,elID["H I"].id]) + prim_He*Yprofs[:,elID["He II"].id] + 2.0*prim_He*(1.0-Yprofs[:,elID["He I"].id]-Yprofs[:,elID["He II"].id]) )
             edens_allions = electrondensity.reshape((npts,1)).repeat(nions,axis=1)
             # Recalculate the recombination rate profile with the new Yprofs and electrondensity
-            HIIdensity  = densitynH * (1.0-Yprofs[:,elID["H I"][0]])
-            HeIIdensity = densitynH * prim_He*Yprofs[:,elID["He II"][0]]
+            HIIdensity  = densitynH * (1.0-Yprofs[:,elID["H I"].id])
+            HeIIdensity = densitynH * prim_He*Yprofs[:,elID["He II"].id]
             HIIdensity  = HIIdensity.reshape((npts,1)).repeat(nions,axis=1)
             HeIIdensity = HeIIdensity.reshape((npts,1)).repeat(nions,axis=1)
             # Recalculate all of the ionization effects that depend on density
             if True:
                 # scdryrate
-                tmpcloneHI = prof_density[:,elID["H I"][0]].copy()
-                w = np.where(prof_density[:,elID["H I"][0]] == 0.0)
+                tmpcloneHI = prof_density[:,elID["H I"].id].copy()
+                w = np.where(prof_density[:,elID["H I"].id] == 0.0)
                 if np.size(w[0]) != 0:
                     print "WARNING :: n(H I) = exactly 0.0 in some zones, setting to smallest value"
                     wb = np.where(tmpcloneHI!=0.0)
                     tmpcloneHI[w] = np.min(tmpcloneHI[wb])
-                    prof_density[:,elID["H I"][0]] = tmpcloneHI.copy()
-                    prof_density[:,elID["D I"][0]] = tmpcloneHI.copy()*elID["D I"][1]
+                    prof_density[:,elID["H I"].id] = tmpcloneHI.copy()
+                    prof_density[:,elID["D I"].id] = tmpcloneHI.copy()*elID["D I"].abund
                 prof_scdryrate = np.zeros((npts,nions))
                 if ncpus > 1:
                     async_results = []
                     # H I
                     async_results.append(pool.apply_async(calc_Jnur.scdryrate, (jnurarr, nuzero,
-                            phelxs[:,elID["H I"][0]], phelxs[:,elID["D I"][0]], phelxs[:,elID["He I"][0]], phelxs[:,elID["He II"][0]], # photoionisation cross-sections
-                            prof_density[:,elID["H I"][0]], prof_density[:,elID["D I"][0]], prof_density[:,elID["He I"][0]], prof_density[:,elID["He II"][0]], electrondensity/(densitynH*(1.0 + 2.0*prim_He)), # densities
-                            elID["H I"][2], elID["D I"][2], elID["He I"][2], elID["He II"][2], # ionisation potentials
+                            phelxs[:,elID["H I"].id], phelxs[:,elID["D I"].id], phelxs[:,elID["He I"].id], phelxs[:,elID["He II"].id], # photoionisation cross-sections
+                            prof_density[:,elID["H I"].id], prof_density[:,elID["D I"].id], prof_density[:,elID["He I"].id], prof_density[:,elID["He II"].id], electrondensity/(densitynH*(1.0 + 2.0*prim_He)), # densities
+                            elID["H I"].ip, elID["D I"].ip, elID["He I"].ip, elID["He II"].ip, # ionisation potentials
                             planck, elvolt, 0))) # constants
                     # He I
                     async_results.append(pool.apply_async(calc_Jnur.scdryrate, (jnurarr, nuzero,
-                            phelxs[:,elID["H I"][0]], phelxs[:,elID["D I"][0]], phelxs[:,elID["He I"][0]], phelxs[:,elID["He II"][0]], # photoionisation cross-sections
-                            prof_density[:,elID["H I"][0]], prof_density[:,elID["D I"][0]], prof_density[:,elID["He I"][0]], prof_density[:,elID["He II"][0]], electrondensity/(densitynH*(1.0 + 2.0*prim_He)), # densities
-                            elID["H I"][2], elID["D I"][2], elID["He I"][2], elID["He II"][2], # ionisation potentials
+                            phelxs[:,elID["H I"].id], phelxs[:,elID["D I"].id], phelxs[:,elID["He I"].id], phelxs[:,elID["He II"].id], # photoionisation cross-sections
+                            prof_density[:,elID["H I"].id], prof_density[:,elID["D I"].id], prof_density[:,elID["He I"].id], prof_density[:,elID["He II"].id], electrondensity/(densitynH*(1.0 + 2.0*prim_He)), # densities
+                            elID["H I"].ip, elID["D I"].ip, elID["He I"].ip, elID["He II"].ip, # ionisation potentials
                             planck, elvolt, 2))) # constants
                     map(ApplyResult.wait, async_results)
 
@@ -866,14 +866,14 @@ def get_halo(redshift,gastemp,bturb,metals=1.0,Hescale=1.0,cosmopar=np.array([0.
                 else:
                     for j in range(nions):
                         if ions[j] == "H I":
-                            ratev = 4.0*np.pi * calc_Jnur.scdryrate(jnurarr, nuzero, phelxs[:,elID["H I"][0]], phelxs[:,elID["D I"][0]], phelxs[:,elID["He I"][0]], phelxs[:,elID["He II"][0]],
-                               prof_density[:,elID["H I"][0]], prof_density[:,elID["D I"][0]], prof_density[:,elID["He I"][0]], prof_density[:,elID["He II"][0]],
-                                electrondensity/(densitynH*(1.0 + 2.0*prim_He)), elID["H I"][2], elID["D I"][2], elID["He I"][2], elID["He II"][2], planck, elvolt, 0)
+                            ratev = 4.0*np.pi * calc_Jnur.scdryrate(jnurarr, nuzero, phelxs[:,elID["H I"].id], phelxs[:,elID["D I"].id], phelxs[:,elID["He I"].id], phelxs[:,elID["He II"].id],
+                               prof_density[:,elID["H I"].id], prof_density[:,elID["D I"].id], prof_density[:,elID["He I"].id], prof_density[:,elID["He II"].id],
+                                electrondensity/(densitynH*(1.0 + 2.0*prim_He)), elID["H I"].ip, elID["D I"].ip, elID["He I"].ip, elID["He II"].ip, planck, elvolt, 0)
                             prof_scdryrate[:,j] = ratev.copy()
                         elif ions[j] == "He I":
-                            ratev = 4.0*np.pi * 10.0 * calc_Jnur.scdryrate(jnurarr, nuzero, phelxs[:,elID["H I"][0]], phelxs[:,elID["D I"][0]], phelxs[:,elID["He I"][0]], phelxs[:,elID["He II"][0]],
-                                prof_density[:,elID["H I"][0]], prof_density[:,elID["D I"][0]], prof_density[:,elID["He I"][0]], prof_density[:,elID["He II"][0]],
-                                electrondensity/(densitynH*(1.0 + 2.0*prim_He)), elID["H I"][2], elID["D I"][2], elID["He I"][2], elID["He II"][2], planck, elvolt, 2)
+                            ratev = 4.0*np.pi * 10.0 * calc_Jnur.scdryrate(jnurarr, nuzero, phelxs[:,elID["H I"].id], phelxs[:,elID["D I"].id], phelxs[:,elID["He I"].id], phelxs[:,elID["He II"].id],
+                                prof_density[:,elID["H I"].id], prof_density[:,elID["D I"].id], prof_density[:,elID["He I"].id], prof_density[:,elID["He II"].id],
+                                electrondensity/(densitynH*(1.0 + 2.0*prim_He)), elID["H I"].ip, elID["D I"].ip, elID["He I"].ip, elID["He II"].ip, planck, elvolt, 2)
                             prof_scdryrate[:,j] = ratev.copy()
                 # Colion
                 for j in range(nions):
@@ -898,8 +898,8 @@ def get_halo(redshift,gastemp,bturb,metals=1.0,Hescale=1.0,cosmopar=np.array([0.
 
             #prof_gamma = prof_phionrate + HIIdensity*prof_chrgtraniHII + HeIIdensity*prof_chrgtraniHeII + prof_colion + prof_other
             # density of this specie = unionized fraction * H volume density * number abundance relative to H
-            HIdensity  = Yprofs[:,elID["H I"][0]]  * densitynH * elID["H I"][1]
-            HeIdensity = Yprofs[:,elID["He I"][0]] * densitynH * elID["He I"][1]
+            HIdensity  = Yprofs[:,elID["H I"].id]  * densitynH * elID["H I"].abund
+            HeIdensity = Yprofs[:,elID["He I"].id] * densitynH * elID["He I"].abund
             HIdensity  = HIdensity.reshape((npts,1)).repeat(nions,axis=1)
             HeIdensity = HeIdensity.reshape((npts,1)).repeat(nions,axis=1)
             prof_alpha = edens_allions*prof_recomb + HIdensity*prof_recombCTHI  + HeIdensity*prof_recombCTHeI
@@ -936,7 +936,7 @@ def get_halo(redshift,gastemp,bturb,metals=1.0,Hescale=1.0,cosmopar=np.array([0.
         # Construct an array of ionization energies and the corresponding array for the indices
         ionlvl = np.zeros(nions,dtype=np.float)
         for j in range(nions):
-            ionlvl[j] = elID[ions[j]][2]*elvolt/planck
+            ionlvl[j] = elID[ions[j]].ip*elvolt/planck
         # Photoionization heating
         prof_eps  = 4.0*np.pi * calc_Jnur.phheatrate_allion(jnurarr, phelxs, nuzero, ionlvl, planck)
         #eps_HI   = 4.0*np.pi * calc_Jnur.phheatrate(jnurarr, phelxs_HI, nuzero, elID["H I"][3]*1.602E-19/6.626E-34)
@@ -944,14 +944,14 @@ def get_halo(redshift,gastemp,bturb,metals=1.0,Hescale=1.0,cosmopar=np.array([0.
         #eps_HeII = 4.0*np.pi * calc_Jnur.phheatrate(jnurarr, phelxs_HeII, nuzero, elID["He II"][3]*1.602E-19/6.626E-34)
         prof_phionheatrate = np.zeros(npts,dtype=np.float)
         for j in range(nions):
-            prof_phionheatrate += prof_eps[:,j]*densitynH*elID[ions[j]][1]*Yprofs[:,j]
+            prof_phionheatrate += prof_eps[:,j]*densitynH*elID[ions[j]].abund*Yprofs[:,j]
         #phion_heat_rate = eps_HI*densitynH*prof_YHI + eps_HeI*densitynH*prim_He*prof_YHeI + eps_HeII*densitynH*prim_He*prof_YHeII
         # Secondary electron photoheating rate (Shull & van Steenberg 1985)
-        heat_HI  = 4.0*np.pi * calc_Jnur.scdryheatrate(jnurarr,nuzero,phelxs[:,elID["H I"][0]],electrondensity/(densitynH*(1.0+2.0*prim_He)), elID["H I"][2], elID["D I"][2], elID["He I"][2], planck, elvolt, 0)
-        #heat_DI  = 4.0*np.pi * calc_Jnur.scdryheatrate(jnurarr,nuzero,phelxs[:,elID["D I"][0]],electrondensity/(densitynH*(1.0+2.0*prim_He)), elID["H I"][2], elID["D I"][2], elID["He I"][2], planck, elvolt, 1)
-        heat_HeI = 4.0*np.pi * calc_Jnur.scdryheatrate(jnurarr,nuzero,phelxs[:,elID["He I"][0]],electrondensity/(densitynH*(1.0+2.0*prim_He)), elID["H I"][2], elID["D I"][2], elID["He I"][2], planck, elvolt, 2)
-        #scdry_heat_rate = heat_HI*densitynH*Yprofs[:,elID["H I"][0]] + heat_DI*densitynH*elID["D I"][1]*Yprofs[:,elID["D I"][0]] + heat_HeI*densitynH*prim_He*Yprofs[:,elID["He I"][0]]
-        scdry_heat_rate = heat_HI*densitynH*Yprofs[:,elID["H I"][0]] + heat_HeI*densitynH*prim_He*Yprofs[:,elID["He I"][0]]
+        heat_HI  = 4.0*np.pi * calc_Jnur.scdryheatrate(jnurarr,nuzero,phelxs[:,elID["H I"].id],electrondensity/(densitynH*(1.0+2.0*prim_He)), elID["H I"].ip, elID["D I"].ip, elID["He I"].ip, planck, elvolt, 0)
+        #heat_DI  = 4.0*np.pi * calc_Jnur.scdryheatrate(jnurarr,nuzero,phelxs[:,elID["D I"].id],electrondensity/(densitynH*(1.0+2.0*prim_He)), elID["H I"].ip, elID["D I"].ip, elID["He I"].ip, planck, elvolt, 1)
+        heat_HeI = 4.0*np.pi * calc_Jnur.scdryheatrate(jnurarr,nuzero,phelxs[:,elID["He I"].id],electrondensity/(densitynH*(1.0+2.0*prim_He)), elID["H I"].ip, elID["D I"].ip, elID["He I"].ip, planck, elvolt, 2)
+        #scdry_heat_rate = heat_HI*densitynH*Yprofs[:,elID["H I"].id] + heat_DI*densitynH*elID["D I"].abund*Yprofs[:,elID["D I"].id] + heat_HeI*densitynH*prim_He*Yprofs[:,elID["He I"].id]
+        scdry_heat_rate = heat_HI*densitynH*Yprofs[:,elID["H I"].id] + heat_HeI*densitynH*prim_He*Yprofs[:,elID["He I"].id]
 
         # Finally, the total heating rate is:
         total_heat = prof_phionheatrate + scdry_heat_rate
@@ -961,12 +961,12 @@ def get_halo(redshift,gastemp,bturb,metals=1.0,Hescale=1.0,cosmopar=np.array([0.
         print "Deriving the temperature profile"
         #prof_temperature, temp, colexc, colion, colrec, diel, brem, comp = calc_Jnur.thermal_equilibrium(total_heat, electrondensity, densitynH, prof_YHI, prof_YHeI, prof_YHeII, prim_He, redshift)
         #prof_temperature, temp, coolfunc = calc_Jnur.thermal_equilibrium(total_heat, electrondensity, densitynH, prof_YHI, prof_YHeI, prof_YHeII, prim_He, redshift)
-        #prof_temperature = calc_Jnur.thermal_equilibrium(total_heat, electrondensity, densitynH, Yprofs[:,elID["H I"][0]], Yprofs[:,elID["He I"][0]], Yprofs[:,elID["He II"][0]], prim_He, redshift)
+        #prof_temperature = calc_Jnur.thermal_equilibrium(total_heat, electrondensity, densitynH, Yprofs[:,elID["H I"].id], Yprofs[:,elID["He I"].id], Yprofs[:,elID["He II"].id], prim_He, redshift)
         old_temperature = prof_temperature.copy()
         if not close:
-            prof_temperature = calc_Jnur.thermal_equilibrium_full(total_heat, old_temperature, electrondensity, densitynH, Yprofs[:,elID["H I"][0]], Yprofs[:,elID["He I"][0]], Yprofs[:,elID["He II"][0]], prim_He, redshift)
+            prof_temperature = calc_Jnur.thermal_equilibrium_full(total_heat, old_temperature, electrondensity, densitynH, Yprofs[:,elID["H I"].id], Yprofs[:,elID["He I"].id], Yprofs[:,elID["He II"].id], prim_He, redshift)
         else:
-            prof_temperature = coolfunc.thermal_equilibrium(total_heat,coolingcurves,densitynH,densitynH*Yprofs[:,elID["H I"][0]]*elID["H I"][1],old_temperature)
+            prof_temperature = coolfunc.thermal_equilibrium(total_heat,coolingcurves,densitynH,densitynH*Yprofs[:,elID["H I"].id]*elID["H I"].abund,old_temperature)
         if np.size(np.where(prof_temperature<=1000.0001)[0]) != 0:
             print "ERROR :: Profile temperature was estimated to be <= 1000 K"
             print "         The code is not currently designed to work in this regime"
@@ -983,7 +983,7 @@ def get_halo(redshift,gastemp,bturb,metals=1.0,Hescale=1.0,cosmopar=np.array([0.
             prof_temperature = old_temperature-tmptemp
         #print "ERROR :: TEMPERATURE SET TO A CONSTANT"
         #prof_temperature = 1.0E4*np.ones(npts)
-        #np.save("tempcheck",prof_temperature)#prof_eps[:,elID["He II"][0]])
+        #np.save("tempcheck",prof_temperature)#prof_eps[:,elID["He II"].id])
         #print 1/0
         #prof_temperature = calc_Jnur.thermal_equilibrium_cf(total_heat, 10.0**coolfunc, 10.0**logT)
         #plt.plot(np.log10(temp),np.log10(colexc),'r-')
@@ -1099,27 +1099,27 @@ def get_halo(redshift,gastemp,bturb,metals=1.0,Hescale=1.0,cosmopar=np.array([0.
         if iteration >= maxiter-10:
             colr = colormap(normalize(maxiter-iteration))
             plt.subplot(221)
-            plt.plot(np.log10(radius*cmtopc),Yprofs[:,elID["H I"][0]], linestyle='-', color=colr)
+            plt.plot(np.log10(radius*cmtopc),Yprofs[:,elID["H I"].id], linestyle='-', color=colr)
             plt.subplot(222)
-            plt.plot(np.log10(radius*cmtopc),Yprofs[:,elID["He I"][0]], linestyle='-', color=colr)
+            plt.plot(np.log10(radius*cmtopc),Yprofs[:,elID["He I"].id], linestyle='-', color=colr)
             plt.subplot(223)
-            plt.plot(np.log10(radius*cmtopc),Yprofs[:,elID["He II"][0]], linestyle='-', color=colr)
+            plt.plot(np.log10(radius*cmtopc),Yprofs[:,elID["He II"].id], linestyle='-', color=colr)
             plt.subplot(224)
-            yplttst = np.abs((old_Yprofs[:,elID["He II"][0]]-Yprofs[:,elID["He II"][0]])/Yprofs[:,elID["He II"][0]])
+            yplttst = np.abs((old_Yprofs[:,elID["He II"].id]-Yprofs[:,elID["He II"].id])/Yprofs[:,elID["He II"].id])
             plt.plot(np.log10(radius*cmtopc),yplttst, linestyle='-', color=colr)
         elif iteration == 100000:
-            plt.plot(np.log10(radius*cmtopc),Yprofs[:,elID["H I"][0]],'r-')
-            plt.plot(np.log10(radius*cmtopc),Yprofs[:,elID["He I"][0]],'g-')
-            plt.plot(np.log10(radius*cmtopc),Yprofs[:,elID["He II"][0]],'b-')
+            plt.plot(np.log10(radius*cmtopc),Yprofs[:,elID["H I"].id],'r-')
+            plt.plot(np.log10(radius*cmtopc),Yprofs[:,elID["He I"].id],'g-')
+            plt.plot(np.log10(radius*cmtopc),Yprofs[:,elID["He II"].id],'b-')
             plt.show()
             plt.clf()
             atst = raw_input("Should I break? (y/n) ")
             if atst=="y": break
             answer = int(raw_input("When should I plot next time"))
         elif iteration == answer:
-            plt.plot(np.log10(radius*cmtopc),Yprofs[:,elID["H I"][0]],'r-')
-            plt.plot(np.log10(radius*cmtopc),Yprofs[:,elID["He I"][0]],'g-')
-            plt.plot(np.log10(radius*cmtopc),Yprofs[:,elID["He II"][0]],'b-')
+            plt.plot(np.log10(radius*cmtopc),Yprofs[:,elID["H I"].id],'r-')
+            plt.plot(np.log10(radius*cmtopc),Yprofs[:,elID["He I"].id],'g-')
+            plt.plot(np.log10(radius*cmtopc),Yprofs[:,elID["He II"].id],'b-')
             plt.show()
             plt.clf()
             answer = int(raw_input("When should I plot next time"))
@@ -1143,7 +1143,7 @@ def get_halo(redshift,gastemp,bturb,metals=1.0,Hescale=1.0,cosmopar=np.array([0.
     print "Calculating volume density profiles"
     for j in range(nions):
         # density of this specie = unionized fraction * H volume density * number abundance relative to H
-        prof_density[:,j] = Yprofs[:,j] * densitynH * elID[ions[j]][1]
+        prof_density[:,j] = Yprofs[:,j] * densitynH * elID[ions[j]].abund
         print ions[j], np.max(Yprofs[:,j]), np.max(prof_density[:,j])
 
     print "Calculating column density profiles"
@@ -1162,12 +1162,12 @@ def get_halo(redshift,gastemp,bturb,metals=1.0,Hescale=1.0,cosmopar=np.array([0.
     #plt.clf()
     #plt.plot(prof_temperature, Harecomb, 'k-')
     #plt.show()
-    HIIdensity = densitynH * (1.0-Yprofs[:,elID["H I"][0]])
+    HIIdensity = densitynH * (1.0-Yprofs[:,elID["H I"].id])
     elecprot = Harecomb*electrondensity*HIIdensity
     HaSB = (1.0/(4.0*np.pi)) * calc_Jnur.coldensprofile(elecprot, radius)  # photons /cm^2 / s / SR
     HaSB = HaSB * (1.98645E-8/6563.0)/4.254517E10   # ergs /cm^2 / s / arcsec^2
 
-    print "--->", np.max(np.log10(prof_coldens[:,elID["H I"][0]]))
+    print "--->", np.max(np.log10(prof_coldens[:,elID["H I"].id]))
     print "inner iter = ", inneriter
     timeB = time.time()
     print "Test completed in {0:f} mins".format((timeB-timeA)/60.0)
@@ -1222,7 +1222,7 @@ def get_halo(redshift,gastemp,bturb,metals=1.0,Hescale=1.0,cosmopar=np.array([0.
         np.savetxt("PP_HI21p08.dat",tmpout)
 
     # Stop the program if a large H I column density has already been reached
-    if np.max(np.log10(prof_coldens[:,elID["H I"][0]])) > 22.0:
+    if np.max(np.log10(prof_coldens[:,elID["H I"].id])) > 22.0:
         print "Terminating after maximum N(H I) has been reached"
         sys.exit()
 
@@ -1238,14 +1238,14 @@ def get_halo(redshift,gastemp,bturb,metals=1.0,Hescale=1.0,cosmopar=np.array([0.
             plt.plot(np.log10(radius*cmtopc),np.log10(4.0*np.pi*rscale**3*fgas),'g-')
 
         plt.figure(1)
-        plt.plot(prof_temperature,np.log10(prof_density[:,elID["H I"][0]]),'r-')
-        plt.plot(prof_temperature,np.log10(prof_density[:,elID["He I"][0]]),'g-')
-        plt.plot(prof_temperature,np.log10(prof_density[:,elID["He II"][0]]),'b-')
+        plt.plot(prof_temperature,np.log10(prof_density[:,elID["H I"].id]),'r-')
+        plt.plot(prof_temperature,np.log10(prof_density[:,elID["He I"].id]),'g-')
+        plt.plot(prof_temperature,np.log10(prof_density[:,elID["He II"].id]),'b-')
 
         plt.figure(2)
-        plt.plot(radius*cmtopc,Yprofs[:,elID["H I"][0]],'r-')
-        plt.plot(radius*cmtopc,Yprofs[:,elID["He I"][0]],'g-')
-        plt.plot(radius*cmtopc,Yprofs[:,elID["He II"][0]],'b-')
+        plt.plot(radius*cmtopc,Yprofs[:,elID["H I"].id],'r-')
+        plt.plot(radius*cmtopc,Yprofs[:,elID["He I"].id],'g-')
+        plt.plot(radius*cmtopc,Yprofs[:,elID["He II"].id],'b-')
 
         plt.figure(3)
         plt.subplot(2,2,1)
@@ -1259,12 +1259,12 @@ def get_halo(redshift,gastemp,bturb,metals=1.0,Hescale=1.0,cosmopar=np.array([0.
         plt.plot(radius*cmtopc,prof_temperature,'k-')
 
         plt.figure(4)
-        plt.plot(radius*cmtopc,prof_coldens[:,elID["H I"][0]],'r-')
-        plt.plot(radius*cmtopc,prof_coldens[:,elID["He I"][0]],'g-')
-        plt.plot(radius*cmtopc,prof_coldens[:,elID["He II"][0]],'b-')
+        plt.plot(radius*cmtopc,prof_coldens[:,elID["H I"].id],'r-')
+        plt.plot(radius*cmtopc,prof_coldens[:,elID["He I"].id],'g-')
+        plt.plot(radius*cmtopc,prof_coldens[:,elID["He II"].id],'b-')
 
         plt.figure(5)
-        plt.plot(radius*cmtopc,np.log10(prof_coldens[:,elID["D I"][0]]/prof_coldens[:,elID["H I"][0]])-np.log10(elID["D I"][1]/elID["H I"][1]),'g-')
+        plt.plot(radius*cmtopc,np.log10(prof_coldens[:,elID["D I"].id]/prof_coldens[:,elID["H I"].id])-np.log10(elID["D I"].abund/elID["H I"].abund),'g-')
         plt.show()
         plt.clf()
     # Return the output filename to be used as the input to the next iteration    
