@@ -1,5 +1,5 @@
 import numpy as np
-import calc_Jnur
+import cython_fns
 
 def hubblepar(z, cosmopar):
     Ez = np.sqrt(cosmopar[2] + cosmopar[3] * ((1.0 + z) ** 3.0))
@@ -29,7 +29,7 @@ def massconc_Prada12(mvir, cosmopar, redshift=3, steps=100000):
     """
     xval = ((cosmopar[2]/cosmopar[3])**(1.0/3.0))/(1.0+redshift) # Eq 13
     yval = 1.0/(mvir/(1.0E12/cosmopar[0])) # Eq 23b
-    xintg = calc_Jnur.massconc_xint(xval,steps)
+    xintg = cython_fns.massconc_xint(xval,steps)
     Dx = 2.5 * (cosmopar[3]/cosmopar[2])**(1.0/3.0) * np.sqrt(1.0 + xval**3) * xintg /xval**1.5 # Eq 12
     Bzero = cmin_prada(xval)/cmin_prada(1.393) # Eq18a
     Bone  = invsigmin_prada(xval)/invsigmin_prada(1.393) # Eq 18b
