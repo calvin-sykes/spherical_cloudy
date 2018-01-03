@@ -1,5 +1,5 @@
 import numpy as np
-import calc_Jnur
+import cython_fns
 from matplotlib import pyplot as plt
 
 def HMbackground_z0_sternberg(nu=None,maxvu=200.0,num=10000):

@@ -3,16 +3,16 @@ See the following website for the relevant data
 http://www-cfadc.phy.ornl.gov/astro/ps/data/
 """
 import numpy as np
-import calc_Jnur
+import cython_fns
 
 # Sharing function
 def yfactor(ion, xsec_HI, xsec_HeI, xsec_HeII, prof_HI, prof_HeI, prof_HeII, engyval, energy):
     """
     Sharing function - defined by Eq 22 from Jenkins (2013)
     """
-    xsecrad_HI   = calc_Jnur.calc_xsec_energy(xsec_HI, engyval, energy)
-    xsecrad_HeI  = calc_Jnur.calc_xsec_energy(xsec_HeI, engyval, energy)
-    xsecrad_HeII = calc_Jnur.calc_xsec_energy(xsec_HeII, engyval, energy)
+    xsecrad_HI   = cython_fns.calc_xsec_energy(xsec_HI, engyval, energy)
+    xsecrad_HeI  = cython_fns.calc_xsec_energy(xsec_HeI, engyval, energy)
+    xsecrad_HeII = cython_fns.calc_xsec_energy(xsec_HeII, engyval, energy)
     output = np.zeros(prof_HI.size)
     divarr = (prof_HI*xsecrad_HI + prof_HeI*xsecrad_HeI + prof_HeII*xsecrad_HeII)
     w = np.where(divarr != 0.0)
