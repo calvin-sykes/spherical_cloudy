@@ -343,10 +343,10 @@ def get_halo(hmodel,redshift,gastemp,bturb,metals=1.0,Hescale=1.0,cosmopar=np.ar
         # Calculate the column density arrays,
         if ncpus == 1:
             for j in range(nions):
-                if geom["use"] == "NFW":
+                if geom == "NFW":
                     coldens, muarr = cython_fns.calc_coldens(prof_density[:,j], radius, nummu)
                     prof_coldens[:,:,j] = coldens.copy()
-                elif geom["use"] == "PP":
+                elif geom == "PP":
                     coldens = cython_fns.calc_coldensPP(prof_density[:,j], radius)
                     prof_coldens[:,j] = coldens.copy()
         else:
@@ -406,20 +406,18 @@ def get_halo(hmodel,redshift,gastemp,bturb,metals=1.0,Hescale=1.0,cosmopar=np.ar
             prof_density[:,elID["D I"].id] = tmpcloneHI.copy()*elID["D I"].abund
         prof_scdryrate = np.zeros((npts,nions))
 
+        scdry_args = (jnurarr, nuzero,
+                      phelxs[:,elID["H I"].id], phelxs[:,elID["D I"].id], phelxs[:,elID["He I"].id], phelxs[:,elID["He II"].id], # photoionisation cross-sections
+                      prof_density[:,elID["H I"].id], prof_density[:,elID["D I"].id], prof_density[:,elID["He I"].id], prof_density[:,elID["He II"].id], electrondensity/(densitynH*(1.0 + 2.0*prim_He)), # densities
+                      elID["H I"].ip, elID["D I"].ip, elID["He I"].ip, elID["He II"].ip, # ionisation potentials
+                      planck, elvolt) # constants
+        
         if ncpus > 1:
             async_results = []
             # H I
-            async_results.append(pool.apply_async(cython_fns.scdryrate, (jnurarr, nuzero,
-                    phelxs[:,elID["H I"].id], phelxs[:,elID["D I"].id], phelxs[:,elID["He I"].id], phelxs[:,elID["He II"].id], # photoionisation cross-sections
-                    prof_density[:,elID["H I"].id], prof_density[:,elID["D I"].id], prof_density[:,elID["He I"].id], prof_density[:,elID["He II"].id], electrondensity/(densitynH*(1.0 + 2.0*prim_He)), # densities
-                    elID["H I"].ip, elID["D I"].ip, elID["He I"].ip, elID["He II"].ip, # ionisation potentials
-                    planck, elvolt, 0))) # constants
+            async_results.append(pool.apply_async(cython_fns.scdryrate, scdry_args + (0,))) # constants
             # He I
-            async_results.append(pool.apply_async(cython_fns.scdryrate, (jnurarr, nuzero,
-                    phelxs[:,elID["H I"].id], phelxs[:,elID["D I"].id], phelxs[:,elID["He I"].id], phelxs[:,elID["He II"].id], # photoionisation cross-sections
-                    prof_density[:,elID["H I"].id], prof_density[:,elID["D I"].id], prof_density[:,elID["He I"].id], prof_density[:,elID["He II"].id], electrondensity/(densitynH*(1.0 + 2.0*prim_He)), # densities
-                    elID["H I"].ip, elID["D I"].ip, elID["He I"].ip, elID["He II"].ip, # ionisation potentials
-                    planck, elvolt, 2))) # constants
+            async_results.append(pool.apply_async(cython_fns.scdryrate, scdry_args + (2,))) # constants
             map(ApplyResult.wait, async_results)
 
             for j in range(nions):
@@ -432,14 +430,10 @@ def get_halo(hmodel,redshift,gastemp,bturb,metals=1.0,Hescale=1.0,cosmopar=np.ar
         else:
             for j in range(nions):
                 if ions[j] == "H I":
-                    ratev = 4.0*np.pi * cython_fns.scdryrate(jnurarr, nuzero, phelxs[:,elID["H I"].id], phelxs[:,elID["D I"].id], phelxs[:,elID["He I"].id], phelxs[:,elID["He II"].id],
-                       prof_density[:,elID["H I"].id], prof_density[:,elID["D I"].id], prof_density[:,elID["He I"].id], prof_density[:,elID["He II"].id],
-                        electrondensity/(densitynH*(1.0 + 2.0*prim_He)), elID["H I"].ip, elID["D I"].ip, elID["He I"].ip, elID["He II"].ip, planck, elvolt, 0)
+                    ratev = 4.0*np.pi * cython_fns.scdryrate(*scdry_args, flip=0)
                     prof_scdryrate[:,j] = ratev.copy()
                 elif ions[j] == "He I":
-                    ratev = 4.0*np.pi * 10.0 * cython_fns.scdryrate(jnurarr, nuzero, phelxs[:,elID["H I"].id], phelxs[:,elID["D I"].id], phelxs[:,elID["He I"].id], phelxs[:,elID["He II"].id],
-                        prof_density[:,elID["H I"].id], prof_density[:,elID["D I"].id], prof_density[:,elID["He I"].id], prof_density[:,elID["He II"].id],
-                        electrondensity/(densitynH*(1.0 + 2.0*prim_He)), elID["H I"].ip, elID["D I"].ip, elID["He I"].ip, elID["He II"].ip, planck, elvolt, 2)
+                    ratev = 4.0*np.pi * 10.0 * cython_fns.scdryrate(*scdry_args, flip=2)
                     prof_scdryrate[:,j] = ratev.copy()
 
         # Calculate other forms of ionization (e.g. photons from H and He recombinations)
@@ -528,17 +522,9 @@ def get_halo(hmodel,redshift,gastemp,bturb,metals=1.0,Hescale=1.0,cosmopar=np.ar
                 if ncpus > 1:
                     async_results = []
                     # H I
-                    async_results.append(pool.apply_async(cython_fns.scdryrate, (jnurarr, nuzero,
-                            phelxs[:,elID["H I"].id], phelxs[:,elID["D I"].id], phelxs[:,elID["He I"].id], phelxs[:,elID["He II"].id], # photoionisation cross-sections
-                            prof_density[:,elID["H I"].id], prof_density[:,elID["D I"].id], prof_density[:,elID["He I"].id], prof_density[:,elID["He II"].id], electrondensity/(densitynH*(1.0 + 2.0*prim_He)), # densities
-                            elID["H I"].ip, elID["D I"].ip, elID["He I"].ip, elID["He II"].ip, # ionisation potentials
-                            planck, elvolt, 0))) # constants
+                    async_results.append(pool.apply_async(cython_fns.scdryrate, scdry_args + (0,)))
                     # He I
-                    async_results.append(pool.apply_async(cython_fns.scdryrate, (jnurarr, nuzero,
-                            phelxs[:,elID["H I"].id], phelxs[:,elID["D I"].id], phelxs[:,elID["He I"].id], phelxs[:,elID["He II"].id], # photoionisation cross-sections
-                            prof_density[:,elID["H I"].id], prof_density[:,elID["D I"].id], prof_density[:,elID["He I"].id], prof_density[:,elID["He II"].id], electrondensity/(densitynH*(1.0 + 2.0*prim_He)), # densities
-                            elID["H I"].ip, elID["D I"].ip, elID["He I"].ip, elID["He II"].ip, # ionisation potentials
-                            planck, elvolt, 2))) # constants
+                    async_results.append(pool.apply_async(cython_fns.scdryrate, scdry_args + (2,)))
                     map(ApplyResult.wait, async_results)
 
                     for j in range(nions):
@@ -551,14 +537,10 @@ def get_halo(hmodel,redshift,gastemp,bturb,metals=1.0,Hescale=1.0,cosmopar=np.ar
                 else:
                     for j in range(nions):
                         if ions[j] == "H I":
-                            ratev = 4.0*np.pi * cython_fns.scdryrate(jnurarr, nuzero, phelxs[:,elID["H I"].id], phelxs[:,elID["D I"].id], phelxs[:,elID["He I"].id], phelxs[:,elID["He II"].id],
-                               prof_density[:,elID["H I"].id], prof_density[:,elID["D I"].id], prof_density[:,elID["He I"].id], prof_density[:,elID["He II"].id],
-                                electrondensity/(densitynH*(1.0 + 2.0*prim_He)), elID["H I"].ip, elID["D I"].ip, elID["He I"].ip, elID["He II"].ip, planck, elvolt, 0)
+                            ratev = 4.0*np.pi * cython_fns.scdryrate(*scdry_args, flip=0)
                             prof_scdryrate[:,j] = ratev.copy()
                         elif ions[j] == "He I":
-                            ratev = 4.0*np.pi * 10.0 * cython_fns.scdryrate(jnurarr, nuzero, phelxs[:,elID["H I"].id], phelxs[:,elID["D I"].id], phelxs[:,elID["He I"].id], phelxs[:,elID["He II"].id],
-                                prof_density[:,elID["H I"].id], prof_density[:,elID["D I"].id], prof_density[:,elID["He I"].id], prof_density[:,elID["He II"].id],
-                                electrondensity/(densitynH*(1.0 + 2.0*prim_He)), elID["H I"].ip, elID["D I"].ip, elID["He I"].ip, elID["He II"].ip, planck, elvolt, 2)
+                            ratev = 4.0*np.pi * 10.0 * cython_fns.scdryrate(*scdry_args, flip=2)
                             prof_scdryrate[:,j] = ratev.copy()
                 # Colion
                 for j in range(nions):
@@ -612,10 +594,7 @@ def get_halo(hmodel,redshift,gastemp,bturb,metals=1.0,Hescale=1.0,cosmopar=np.ar
 
         print "Deriving the temperature profile"
         old_temperature = prof_temperature.copy()
-        if not close:
-            prof_temperature = cython_fns.thermal_equilibrium_full(total_heat, old_temperature, electrondensity, densitynH, Yprofs[:,elID["H I"].id], Yprofs[:,elID["He I"].id], Yprofs[:,elID["He II"].id], prim_He, redshift)
-        else:
-            prof_temperature = coolfunc.thermal_equilibrium(total_heat,coolingcurves,densitynH,densitynH*Yprofs[:,elID["H I"].id]*elID["H I"].abund,old_temperature)
+        prof_temperature = cython_fns.thermal_equilibrium_full(total_heat, old_temperature, electrondensity, densitynH, Yprofs[:,elID["H I"].id], Yprofs[:,elID["He I"].id], Yprofs[:,elID["He II"].id], prim_He, redshift)
         if np.size(np.where(prof_temperature<=1000.0001)[0]) != 0:
             print "ERROR :: Profile temperature was estimated to be <= 1000 K"
             print "         The code is not currently designed to work in this regime"
