@@ -241,11 +241,11 @@ def get_halo(hmodel,redshift,gastemp,bturb,metals=1.0,Hescale=1.0,cosmopar=np.ar
             prof_temperature = tdata[:,1]
             temp_densitynH = tdata[:,2]
             # Extract the data from the array
-            Yprofs = 1.0E-1*np.ones((npts,nions))
+            Yprofs = 1.0E-1*np.ones((nions, npts))
             for j in range(nions):
                 # density of this specie = unionized fraction * H volume density * number abundance relative to H
-                prof_density[:,j] = tdata[:,arridx["voldens"][ions[j]]]
-                Yprofs[:,j] = prof_density[:,j] / (temp_densitynH * elID[ions[j]].abund)
+                prof_density[j] = tdata[:,arridx["voldens"][ions[j]]]
+                Yprofs[j] = prof_density[:,j] / (temp_densitynH * elID[ions[j]].abund)
             prof_phionrate = np.zeros((npts,nions))
             densitym  = temp_densitynH * protmss * (1.0 + 4.0*prim_He)
         elif geom == "PP":
@@ -271,7 +271,7 @@ def get_halo(hmodel,redshift,gastemp,bturb,metals=1.0,Hescale=1.0,cosmopar=np.ar
             prof_density = 1.0E-1*np.ones((npts,nions))
         prof_temperature = gastemp * np.ones(npts)
         prof_phionrate = np.zeros((npts,nions))
-        Yprofs = 1.0E-2*np.ones((npts,nions))
+        Yprofs = 1.0E-2*np.ones((nions,npts))
         densitym = protmss * (1.0 + 4.0*prim_He) * np.ones(npts) # Default to be used for PP
 
     # An array used to check if convergence has been reached for each ion and in each cell.
@@ -310,7 +310,8 @@ def get_halo(hmodel,redshift,gastemp,bturb,metals=1.0,Hescale=1.0,cosmopar=np.ar
             istore = 0
 
         # Calculate the pressure profile
-        dof = (2.0-Yprofs[:,elID["H I"].id]) + prim_He*(3.0 - 2.0*Yprofs[:,elID["He I"].id] - 1.0*Yprofs[:,elID["He II"].id])
+        dof = (2.0-Yprofs[elID["H I"].id]) + prim_He*(3.0 - 2.0*Yprofs[elID["He I"].id] - 1.0*Yprofs[elID["He II"].id])
+#        print dof
         masspp = (1.0 + 4.0*prim_He)/dof
         if geom == "NFW":
             fgas = cython_fns.fgasx(densitym,radius,hmodel.rscale)
@@ -335,10 +336,10 @@ def get_halo(hmodel,redshift,gastemp,bturb,metals=1.0,Hescale=1.0,cosmopar=np.ar
         # Update the volume density of the unionized species
         for j in range(nions):
             # density of this specie = unionized fraction * H volume density * number abundance relative to H
-            prof_density[:,j] = Yprofs[:,j] * densitynH * elID[ions[j]].abund
+            prof_density[:,j] = Yprofs[j] * densitynH * elID[ions[j]].abund
 
         # Compute the electron density
-        electrondensity = densitynH * ( (1.0-Yprofs[:,elID["H I"].id]) + prim_He*Yprofs[:,elID["He II"].id] + 2.0*prim_He*(1.0-Yprofs[:,elID["He I"].id]-Yprofs[:,elID["He II"].id]) )
+        electrondensity = densitynH * ( (1.0-Yprofs[elID["H I"].id]) + prim_He*Yprofs[elID["He II"].id] + 2.0*prim_He*(1.0-Yprofs[elID["He I"].id]-Yprofs[elID["He II"].id]) )
 
         # Calculate the column density arrays,
         if ncpus == 1:
@@ -445,8 +446,8 @@ def get_halo(hmodel,redshift,gastemp,bturb,metals=1.0,Hescale=1.0,cosmopar=np.ar
 
         # Calculate the charge transfer ionization rates
         print "Calculating charge transfer rates"
-        HIIdensity  = densitynH * (1.0-Yprofs[:,elID["H I"].id])
-        HeIIdensity = densitynH * prim_He*Yprofs[:,elID["He II"].id]
+        HIIdensity  = densitynH * (1.0-Yprofs[elID["H I"].id])
+        HeIIdensity = densitynH * prim_He*Yprofs[elID["He II"].id]
         HIIdensity = HIIdensity.reshape((npts,1)).repeat(nions,axis=1)
         HeIIdensity = HeIIdensity.reshape((npts,1)).repeat(nions,axis=1)
         prof_chrgtraniHII = np.zeros((npts,nions))
@@ -464,7 +465,7 @@ def get_halo(hmodel,redshift,gastemp,bturb,metals=1.0,Hescale=1.0,cosmopar=np.ar
         # Total all of the ionization rates
         prof_gamma = prof_phionrate + prof_scdryrate + HIIdensity*prof_chrgtraniHII + HeIIdensity*prof_chrgtraniHeII + prof_other + prof_colion
 
-        "Calculating recombination rates"
+        print "Calculating recombination rates"
         prof_recomb = np.zeros((npts,nions))
         prof_recombCTHI  = np.zeros((npts,nions))
         prof_recombCTHeI = np.zeros((npts,nions))
@@ -498,13 +499,13 @@ def get_halo(hmodel,redshift,gastemp,bturb,metals=1.0,Hescale=1.0,cosmopar=np.ar
             # Calculate the Yprofs
             Yprofs = misc.calc_yprofs(ions,prof_rates,elID)
             # Test if the profiles have converged
-            tstconv = ( (np.abs((tmp_Yprofs-Yprofs)/Yprofs)<concrit**2)|(Yprofs==0.0)).astype(np.int).sum(axis=0)
+            tstconv = ( (np.abs((tmp_Yprofs-Yprofs)/Yprofs)<concrit**2)|(Yprofs==0.0)).astype(np.int).sum(axis=1)
             # Reset ne and the rates
-            electrondensity = densitynH * ( (1.0-Yprofs[:,elID["H I"].id]) + prim_He*Yprofs[:,elID["He II"].id] + 2.0*prim_He*(1.0-Yprofs[:,elID["He I"].id]-Yprofs[:,elID["He II"].id]) )
+            electrondensity = densitynH * ( (1.0-Yprofs[elID["H I"].id]) + prim_He*Yprofs[elID["He II"].id] + 2.0*prim_He*(1.0-Yprofs[elID["He I"].id]-Yprofs[elID["He II"].id]) )
             edens_allions = electrondensity.reshape((npts,1)).repeat(nions,axis=1)
             # Recalculate the recombination rate profile with the new Yprofs and electrondensity
-            HIIdensity  = densitynH * (1.0-Yprofs[:,elID["H I"].id])
-            HeIIdensity = densitynH * prim_He*Yprofs[:,elID["He II"].id]
+            HIIdensity  = densitynH * (1.0-Yprofs[elID["H I"].id])
+            HeIIdensity = densitynH * prim_He*Yprofs[elID["He II"].id]
             HIIdensity  = HIIdensity.reshape((npts,1)).repeat(nions,axis=1)
             HeIIdensity = HeIIdensity.reshape((npts,1)).repeat(nions,axis=1)
             # Recalculate all of the ionization effects that depend on density
@@ -556,8 +557,8 @@ def get_halo(hmodel,redshift,gastemp,bturb,metals=1.0,Hescale=1.0,cosmopar=np.ar
             prof_gamma = prof_phionrate + prof_scdryrate + HIIdensity*prof_chrgtraniHII + HeIIdensity*prof_chrgtraniHeII + prof_other + prof_colion
 
             # density of this specie = unionized fraction * H volume density * number abundance relative to H
-            HIdensity  = Yprofs[:,elID["H I"].id]  * densitynH * elID["H I"].abund
-            HeIdensity = Yprofs[:,elID["He I"].id] * densitynH * elID["He I"].abund
+            HIdensity  = Yprofs[elID["H I"].id]  * densitynH * elID["H I"].abund
+            HeIdensity = Yprofs[elID["He I"].id] * densitynH * elID["He I"].abund
             HIdensity  = HIdensity.reshape((npts,1)).repeat(nions,axis=1)
             HeIdensity = HeIdensity.reshape((npts,1)).repeat(nions,axis=1)
             prof_alpha = edens_allions*prof_recomb + HIdensity*prof_recombCTHI  + HeIdensity*prof_recombCTHeI
@@ -583,18 +584,18 @@ def get_halo(hmodel,redshift,gastemp,bturb,metals=1.0,Hescale=1.0,cosmopar=np.ar
         prof_eps  = 4.0*np.pi * cython_fns.phheatrate_allion(jnurarr, phelxs, nuzero, ionlvl, planck)
         prof_phionheatrate = np.zeros(npts,dtype=np.float)
         for j in range(nions):
-            prof_phionheatrate += prof_eps[:,j]*densitynH*elID[ions[j]].abund*Yprofs[:,j]
+            prof_phionheatrate += prof_eps[:,j]*densitynH*elID[ions[j]].abund*Yprofs[j]
         # Secondary electron photoheating rate (Shull & van Steenberg 1985)
         heat_HI  = 4.0*np.pi * cython_fns.scdryheatrate(jnurarr,nuzero,phelxs[:,elID["H I"].id],electrondensity/(densitynH*(1.0+2.0*prim_He)), elID["H I"].ip, elID["D I"].ip, elID["He I"].ip, planck, elvolt, 0)
         heat_HeI = 4.0*np.pi * cython_fns.scdryheatrate(jnurarr,nuzero,phelxs[:,elID["He I"].id],electrondensity/(densitynH*(1.0+2.0*prim_He)), elID["H I"].ip, elID["D I"].ip, elID["He I"].ip, planck, elvolt, 2)
-        scdry_heat_rate = heat_HI*densitynH*Yprofs[:,elID["H I"].id] + heat_HeI*densitynH*prim_He*Yprofs[:,elID["He I"].id]
+        scdry_heat_rate = heat_HI*densitynH*Yprofs[elID["H I"].id] + heat_HeI*densitynH*prim_He*Yprofs[elID["He I"].id]
 
         # Finally, the total heating rate is:
         total_heat = prof_phionheatrate + scdry_heat_rate
 
         print "Deriving the temperature profile"
         old_temperature = prof_temperature.copy()
-        prof_temperature = cython_fns.thermal_equilibrium_full(total_heat, old_temperature, electrondensity, densitynH, Yprofs[:,elID["H I"].id], Yprofs[:,elID["He I"].id], Yprofs[:,elID["He II"].id], prim_He, redshift)
+        prof_temperature = cython_fns.thermal_equilibrium_full(total_heat, old_temperature, electrondensity, densitynH, Yprofs[elID["H I"].id], Yprofs[elID["He I"].id], Yprofs[elID["He II"].id], prim_He, redshift)
         if np.size(np.where(prof_temperature<=1000.0001)[0]) != 0:
             print "ERROR :: Profile temperature was estimated to be <= 1000 K"
             print "         The code is not currently designed to work in this regime"
@@ -613,7 +614,7 @@ def get_halo(hmodel,redshift,gastemp,bturb,metals=1.0,Hescale=1.0,cosmopar=np.ar
             print "Averaging the stored Yprofs"
             Yprofs = np.mean(store_Yprofs, axis=2)
             #Yprofs = uniform_filter1d(Yprofs, 5, axis=0)
-        tstcrit = ( (np.abs((old_Yprofs-Yprofs)/Yprofs)<concrit)|(Yprofs==0.0)).astype(np.int).sum(axis=0)
+        tstcrit = ( (np.abs((old_Yprofs-Yprofs)/Yprofs)<concrit)|(Yprofs==0.0)).astype(np.int).sum(axis=1)
         if np.array_equal(tstcrit,allionpnt):
             # Once we are close to convergence, use a more reliable cooling function
             print "Getting close!! Try a more accurate cooling function"
@@ -636,8 +637,8 @@ def get_halo(hmodel,redshift,gastemp,bturb,metals=1.0,Hescale=1.0,cosmopar=np.ar
     print "Calculating volume density profiles"
     for j in range(nions):
         # density of this specie = unionized fraction * H volume density * number abundance relative to H
-        prof_density[:,j] = Yprofs[:,j] * densitynH * elID[ions[j]].abund
-        print ions[j], np.max(Yprofs[:,j]), np.max(prof_density[:,j])
+        prof_density[:,j] = Yprofs[j] * densitynH * elID[ions[j]].abund
+        print ions[j], np.max(Yprofs[j]), np.max(prof_density[:,j])
 
     print "Calculating column density profiles"
     prof_coldens = np.zeros_like(prof_density)
@@ -652,7 +653,7 @@ def get_halo(hmodel,redshift,gastemp,bturb,metals=1.0,Hescale=1.0,cosmopar=np.ar
 
     print "Calculating Ha surface brightness profile"
     Harecomb = recomb.Ha_recomb(prof_temperature)
-    HIIdensity = densitynH * (1.0-Yprofs[:,elID["H I"].id])
+    HIIdensity = densitynH * (1.0-Yprofs[elID["H I"].id])
     elecprot = Harecomb*electrondensity*HIIdensity
     HaSB = (1.0/(4.0*np.pi)) * cython_fns.coldensprofile(elecprot, radius)  # photons /cm^2 / s / SR
     HaSB = HaSB * (1.98645E-8/6563.0)/4.254517E10   # ergs /cm^2 / s / arcsec^2

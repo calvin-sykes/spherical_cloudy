@@ -241,7 +241,7 @@ def calc_yprofs(ions,rates,elID):
     """
     Y_(X^n+) = n(X^n+) / SUM_i{ n(X^i+) }
     """
-    Yprofs = np.zeros_like(rates)
+    Yprofs = np.zeros_like(rates.T)
     # Calculate the Yprof for each ion under consideration
     elems = dict({})
     for i in range(len(ions)):
@@ -263,11 +263,11 @@ def calc_yprofs(ions,rates,elID):
             invrate *= rates[:,idx]
             invrate += 1.0
         # Set the neutral state
-        Yprofs[:,elID[ekeys[i] + " I"].id] = 1.0/invrate.copy()
+        Yprofs[elID[ekeys[i] + " I"].id] = 1.0/invrate.copy()
         # Now calculate the first, then second rate etc.
         for j in range(1,len(elems[ekeys[i]])):
             iname = ekeys[i] + " " + numtorn(j)
             invrate /= rates[:,elID[iname].id]
             sname = ekeys[i] + " " + numtorn(j+1)
-            Yprofs[:,elID[sname].id] = 1.0/invrate.copy()
+            Yprofs[elID[sname].id] = 1.0/invrate.copy()
     return Yprofs.copy()

@@ -629,13 +629,13 @@ def thermal_equilibrium(np.ndarray[DTYPE_t, ndim=1] total_heat not None,
 
 @cython.wraparound(False)
 @cython.boundscheck(False)
-def thermal_equilibrium_full(np.ndarray[DTYPE_t, ndim=1] total_heat not None,
-                            np.ndarray[DTYPE_t, ndim=1] old_temp not None,
-                            np.ndarray[DTYPE_t, ndim=1] edensity not None,
-                            np.ndarray[DTYPE_t, ndim=1] densitynH not None,
-                            np.ndarray[DTYPE_t, ndim=1] prof_YHI not None,
-                            np.ndarray[DTYPE_t, ndim=1] prof_YHeI not None,
-                            np.ndarray[DTYPE_t, ndim=1] prof_YHeII not None,
+def thermal_equilibrium_full(double[::1] total_heat not None,
+                            double[::1] old_temp not None,
+                            double[::1] edensity not None,
+                            double[::1] densitynH not None,
+                            double[::1] prof_YHI not None,
+                            double[::1] prof_YHeI not None,
+                            double[::1] prof_YHeII not None,
                             double prim_He, double redshift):
     """
     Calculate the temperature corresponding to an equal heating and cooling rate in each shell
@@ -650,13 +650,13 @@ def thermal_equilibrium_full(np.ndarray[DTYPE_t, ndim=1] total_heat not None,
     cdef double cool_diel, cool_brem, cool_comp, total_cool
 
     sz_r  = total_heat.shape[0]
-    cdef np.ndarray[DTYPE_t, ndim=1] prof_temperature = np.zeros((sz_r), dtype=DTYPE)
+    cdef double[::1] prof_temperature = np.zeros((sz_r), dtype=DTYPE)
 
     # Generate a range of temperatures that the code is allowed to use:
     cdef int sz_c = 1000
-    cdef np.ndarray[DTYPE_t, ndim=1] temp = 10.0**np.linspace(3.0,6.0,sz_c)
-    cdef np.ndarray[DTYPE_t, ndim=1] coolfunc = np.zeros((sz_c), dtype=DTYPE)
-    cdef np.ndarray[DTYPE_t, ndim=1] coolfuncL = np.zeros((sz_c), dtype=DTYPE)
+    cdef double[::1] temp = 10.0**np.linspace(3.0,6.0,sz_c)
+    cdef double[::1] coolfunc = np.zeros((sz_c), dtype=DTYPE)
+    cdef double[::1] coolfuncL = np.zeros((sz_c), dtype=DTYPE)
 
     eflag = 0 # No error
     for r in range(0,sz_r):

@@ -111,20 +111,20 @@ def other(ion,engy,profdens,densitynH,Yprof,electrondensity,phelxs,prof_temperat
         trmc = 2.42*alpha2s_HeII(prof_temperature)
         trmd = (alphaB_HeII(prof_temperature) - alpha2p_HeII(prof_temperature) - alphaeff2s_HeII(prof_temperature)) * yfactor("HI", phelxs[:,eHI], phelxs[:,eHeI], phelxs[:,eHeII], profdens[:,eHI], profdens[:,eHeI], profdens[:,eHeII], engy, 50.0*np.ones(npts))
         trme = 1.42*(alphaeff2s_HeII(prof_temperature) - alpha2s_HeII(prof_temperature))
-        tmpHe = 1.0-Yprof[:,eHeI]-Yprof[:,eHeII]
+        tmpHe = 1.0-Yprof[eHeI]-Yprof[eHeII]
         B3_HI[w_HI]   = ((tmpHe*densitynH*elID["He I"].abund)*electrondensity * ( trma + trmb + trmc + trmd + trme ))[w_HI]/prof_HI[w_HI]
         # Equation B7 from Jenkins et al. (2013)
         B7_HI   = np.zeros(npts)
         trma = alpha1s_HeI(prof_temperature) * yfactor("HI", phelxs[:,eHI], phelxs[:,eHeI], phelxs[:,eHeII], profdens[:,eHI], profdens[:,eHeI], profdens[:,eHeII], engy, elID["He I"].ip+1.0E-7*kB*prof_temperature/elvolt)
         B7_HI[w_HI]   = (prof_HeII*electrondensity * ( trma + 0.96*alphaB_HeI(prof_temperature) ))[w_HI]/prof_HI[w_HI]
-        tmpH   = 1.0-Yprof[:,eHI]
+        tmpH   = 1.0-Yprof[eHI]
         recomb = np.zeros(npts)
         recomb[w_HI]  = ((tmpH*densitynH*elID["H I"].abund*electrondensity) * alpha1s_HI(prof_temperature) * yfactor("HI", phelxs[:,eHI], phelxs[:,eHeI], phelxs[:,eHeII], profdens[:,eHI], profdens[:,eHeI], profdens[:,eHeII], engy, elID["H I"].ip+1.0E-7*kB*prof_temperature/elvolt))[w_HI]/prof_HI[w_HI]
         gammarate = B3_HI + B7_HI + recomb
     elif ion == "D I":
         gammarate = np.zeros(npts)
     elif ion == "He I":
-        tmpHe = 1.0-Yprof[:,eHeI]-Yprof[:,eHeII]
+        tmpHe = 1.0-Yprof[eHeI]-Yprof[eHeII]
         prof_HeI = profdens[:,eHeI]
         prof_HeII = profdens[:,eHeII]
         w_HeI   = np.where(prof_HeI!=0.0)
@@ -137,7 +137,7 @@ def other(ion,engy,profdens,densitynH,Yprof,electrondensity,phelxs,prof_temperat
         B6_HeI[w_HeI]  = (prof_HeII*electrondensity * alpha1s_HeII(prof_temperature) * yfactor("HeI", phelxs[:,eHI], phelxs[:,eHeI], phelxs[:,eHeII], profdens[:,eHI], profdens[:,eHeI], profdens[:,eHeII], engy, elID["He I"].ip+1.0E-7*kB*prof_temperature/elvolt))[w_HeI]/prof_HeI[w_HeI]
         gammarate = B2_HeI + B6_HeI
     elif ion == "He II":
-        tmpHe = 1.0-Yprof[:,eHeI]-Yprof[:,eHeII]
+        tmpHe = 1.0-Yprof[eHeI]-Yprof[eHeII]
         prof_HeII = profdens[:,eHeII]
         w_HeII  = np.where(prof_HeII!=0.0)
         B1_HeII = np.zeros(npts)
