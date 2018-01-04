@@ -231,20 +231,20 @@ def get_halo(hmodel,redshift,gastemp,bturb,metals=1.0,Hescale=1.0,cosmopar=np.ar
             for i in range((numarr-strt)/2):
                 arridx["voldens"][ions[i]] = strt + i
                 arridx["coldens"][ions[i]] = strt + i + (numarr-strt)/2
-            old_radius = get_radius(virialr, geomscale, npts, method=radmethod)
+            old_radius = get_radius(hmodel.rvir, geomscale, npts, method=radmethod)
             if old_radius.size != npts:
                 print "Error defining radius"
                 sys.exit()
             prof_coldens = np.zeros((nions,npts,nummu))
             prof_density = np.zeros((nions,npts))
             radius = old_radius.copy()
-            prof_temperature = tdata[:,1]
-            temp_densitynH = tdata[:,2]
+            prof_temperature = tdata[:,1].copy()
+            temp_densitynH = tdata[:,2].copy()
             # Extract the data from the array
             Yprofs = 1.0E-1*np.ones((nions,npts))
             for j in range(nions):
                 # density of this specie = unionized fraction * H volume density * number abundance relative to H
-                prof_density[j] = tdata[:,arridx["voldens"][ions[j]]]
+                prof_density[j] = tdata[:,arridx["voldens"][ions[j]]].copy()
                 Yprofs[j] = prof_density[j] / (temp_densitynH * elID[ions[j]].abund)
             prof_phionrate = np.zeros((nions,npts))
             densitym  = temp_densitynH * protmss * (1.0 + 4.0*prim_He)
@@ -311,7 +311,6 @@ def get_halo(hmodel,redshift,gastemp,bturb,metals=1.0,Hescale=1.0,cosmopar=np.ar
 
         # Calculate the pressure profile
         dof = (2.0-Yprofs[elID["H I"].id]) + prim_He*(3.0 - 2.0*Yprofs[elID["He I"].id] - 1.0*Yprofs[elID["He II"].id])
-#        print dof
         masspp = (1.0 + 4.0*prim_He)/dof
         if geom == "NFW":
             fgas = cython_fns.fgasx(densitym,radius,hmodel.rscale)
@@ -624,9 +623,9 @@ def get_halo(hmodel,redshift,gastemp,bturb,metals=1.0,Hescale=1.0,cosmopar=np.ar
 
         print "STATISTICS --"
         print "ION  INDEX   OLD VALUE    NEW VALUE   |OLD-NEW|"
-        w_maxoff   = np.argmax(np.abs((old_Yprofs-Yprofs)/Yprofs),axis=0)
+        w_maxoff   = np.argmax(np.abs((old_Yprofs-Yprofs)/Yprofs),axis=1)
         for j in range(nions):
-            print ions[j], w_maxoff[j], old_Yprofs[w_maxoff[j],j], Yprofs[w_maxoff[j],j], np.abs((old_Yprofs[w_maxoff[j],j] - Yprofs[w_maxoff[j],j])/Yprofs[w_maxoff[j],j])
+            print ions[j], w_maxoff[j], old_Yprofs[j,w_maxoff[j]], Yprofs[j,w_maxoff[j]], np.abs((old_Yprofs[j,w_maxoff[j]] - Yprofs[j,w_maxoff[j]])/Yprofs[j,w_maxoff[j]])
 
         # Check if the stopping criteria were met
         if iteration > maxiter:
@@ -680,7 +679,7 @@ def get_halo(hmodel,redshift,gastemp,bturb,metals=1.0,Hescale=1.0,cosmopar=np.ar
         outfname = out_dir + ("/{0:s}_mass{1:s}_redshift{2:s}_baryscl{3:s}_{4:s}_{5:d}-{6:d}"
                               .format(geom,mstring,rstring,bstring,hstring,npts,nummu))
         print "Saving file {0:s}.npy".format(outfname)
-        tmpout = np.concatenate((radius.reshape((npts,1))*cmtopc,prof_temperature.reshape((npts,1)),densitynH.reshape((npts,1)),HaSB.reshape((npts,1)),prof_density.reshape((npts,nions)),prof_coldens.reshape((npts,nions))),axis=1)
+        tmpout = np.concatenate((radius.reshape((npts,1))*cmtopc,prof_temperature.reshape((npts,1)),densitynH.reshape((npts,1)),HaSB.reshape((npts,1)),prof_density.T,prof_coldens.T),axis=1)
     elif geom == "PP":
         # needs fixing
         assert False
