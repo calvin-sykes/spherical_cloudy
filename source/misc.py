@@ -259,15 +259,14 @@ def calc_yprofs(ions,rates,elID):
         invrate = 1.0
         for j in range(1,1+len(elems[ekeys[i]])):
             iname = ekeys[i] + " " + numtorn(elems[ekeys[i]][-j]+1)
-            idx = elID[iname].id
-            invrate *= rates[:,idx]
+            invrate *= rates[elID[iname].id]
             invrate += 1.0
         # Set the neutral state
-        Yprofs[:,elID[ekeys[i] + " I"].id] = 1.0/invrate.copy()
+        Yprofs[elID[ekeys[i] + " I"].id] = 1.0/invrate.copy()
         # Now calculate the first, then second rate etc.
         for j in range(1,len(elems[ekeys[i]])):
             iname = ekeys[i] + " " + numtorn(j)
-            invrate /= rates[:,elID[iname].id]
+            invrate /= rates[elID[iname].id]
             sname = ekeys[i] + " " + numtorn(j+1)
-            Yprofs[:,elID[sname].id] = 1.0/invrate.copy()
+            Yprofs[elID[sname].id] = 1.0/invrate.copy()
     return Yprofs.copy()
