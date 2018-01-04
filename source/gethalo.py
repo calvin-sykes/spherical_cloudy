@@ -693,6 +693,8 @@ def get_halo(hmodel,redshift,gastemp,bturb,metals=1.0,Hescale=1.0,cosmopar=np.ar
                     .format(hmodel.name,dstring,rstring,hstring,npts))
         print "Saving file {0:s}.npy".format(outfname)
         tmpout = np.concatenate((radius.reshape((npts,1))*cmtopc,prof_temperature.reshape((npts,1)),densitynH.reshape((npts,1)),prof_density,prof_coldens),axis=1)
+        # make sure array is C-contiguous
+        tmpout = np.require(tmpout, 'C')
 
     np.save(outfname, tmpout)
 
