@@ -20,6 +20,8 @@ import os
 from multiprocessing import cpu_count as mpCPUCount
 from multiprocessing import Pool as mpPool
 from multiprocessing.pool import ApplyResult
+import astropy.units as u
+from astropy.cosmology import FlatLambdaCDM
 
 """
 METHOD:
@@ -131,6 +133,10 @@ def get_halo(hmodel,redshift,gastemp,bturb,metals=1.0,Hescale=1.0,cosmopar=np.ar
     geom = options["geometry"]
     geomscale = options["geomscale"]
     radmethod = 2  # Method used to define the radial coordinate
+
+     # Set up the cosmology
+    cosmoVal = FlatLambdaCDM(H0=100.0*cosmopar[0] * u.km / u.s / u.Mpc, Om0=cosmopar[3])
+    hubb_time = cosmoVal.age(redshift).to(u.s).value
 
     # Get the element ID numbers
     elID, extions = elemids.getids(ions,metals)
@@ -592,9 +598,12 @@ def get_halo(hmodel,redshift,gastemp,bturb,metals=1.0,Hescale=1.0,cosmopar=np.ar
         # Finally, the total heating rate is:
         total_heat = prof_phionheatrate + scdry_heat_rate
 
+        print "Calculating cooling rate"
+        total_cool = cython_fns.cool_rate(total_heat, electrondensity, densitynH, Yprofs[elID["H I"].id], Yprofs[elID["He I"].id], Yprofs[elID["He II"].id], prim_He, redshift)
+        
         print "Deriving the temperature profile"
         old_temperature = prof_temperature.copy()
-        prof_temperature = cython_fns.thermal_equilibrium_full(total_heat, old_temperature, electrondensity, densitynH, Yprofs[elID["H I"].id], Yprofs[elID["He I"].id], Yprofs[elID["He II"].id], prim_He, redshift)
+        prof_temperature = cython_fns.thermal_equilibrium_full(total_heat, total_cool, old_temperature)
         if np.size(np.where(prof_temperature<=1000.0001)[0]) != 0:
             print "ERROR :: Profile temperature was estimated to be <= 1000 K"
             print "         The code is not currently designed to work in this regime"

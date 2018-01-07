@@ -539,129 +539,19 @@ def scdryheatrate(double[:,::1] jnur not None,
             retarr[r] = eint
     return np.asarray(retarr)
 
-
 @cython.wraparound(False)
 @cython.boundscheck(False)
 @cython.cdivision(True) 
-def thermal_equilibrium(double[::1] total_heat not None,
-                        double[::1] edensity not None,
-                        double[::1] densitynH not None,
-                        double[::1] prof_YHI not None,
-                        double[::1] prof_YHeI not None,
-                        double[::1] prof_YHeII not None,
-                        double prim_He, double redshift):
-    """
-    Calculate the temperature corresponding to an equal heating and cooling rate in each shell
-    The following rates are mostly compiled from a combination of Cen (1992) and Anninos (1997)
-    """
-    cdef int sz_r, eflag
-    cdef int r, c, cmin
-    cdef double dmin, dtmp, gradval
-    cdef double cool_colexc_HI, cool_colexc_HeI, cool_colexc_HeII, cool_colexc
-    cdef double cool_colion_HI, cool_colion_HeI, cool_colion_HeII, cool_colion_HeS, cool_colion
-    cdef double cool_rec_HII, cool_rec_HeII, cool_rec_HeIII, cool_rec
-    cdef double cool_diel, cool_brem, cool_comp, total_cool
+def cool_rate(double[::1] total_heat not None,
+              double[::1] edensity not None,
+              double[::1] densitynH not None,
+              double[::1] prof_YHI not None,
+              double[::1] prof_YHeI not None,
+              double[::1] prof_YHeII not None,
+              double prim_He, double redshift):
 
-    sz_r  = total_heat.shape[0]
-    cdef double[::1] prof_temperature = np.zeros((sz_r), dtype=DTYPE)
-
-    # Generate a range of temperatures that the code is allowed to use:
-    cdef int sz_c = 500
-    cdef double[::1] temp = 10.0**np.linspace(3.0,6.0,sz_c)
-    cdef double[::1] coolfunc = np.zeros((sz_c), dtype=DTYPE)
-    cdef double[::1] coolfuncL = np.zeros((sz_c), dtype=DTYPE)
-    cdef double[::1] coolfuncM = np.zeros((sz_c), dtype=DTYPE)
-    cdef double[::1] coolfuncR = np.zeros((sz_c), dtype=DTYPE)
-
-    with nogil:
-        eflag = 0 # No error
-        for r in range(0,sz_r):
-            cmin=0
-            for c in range(0,sz_c):
-                # Collisional excitation cooling (Black 1981, Cen 1992)
-                cool_colexc_HI =   (7.50E-19 / (1.0 + csqrt(temp[c]/1.0E5))) * cexp(-118348.0/temp[c]) * edensity[r] * prof_YHI[r] * densitynH[r]
-                cool_colexc_HeI =  (9.10E-27 / (1.0 + csqrt(temp[c]/1.0E5))) * (temp[c]**-0.1687) * cexp(-13179.0/temp[c]) * edensity[r] * edensity[r] * prof_YHeI[r] * prim_He * densitynH[r]
-                cool_colexc_HeII = (5.54E-17 / (1.0 + csqrt(temp[c]/1.0E5))) * (temp[c]**-0.397) * cexp(-473638.0/temp[c]) * edensity[r] * prof_YHeII[r] * prim_He * densitynH[r]
-                cool_colexc = cool_colexc_HI+cool_colexc_HeI+cool_colexc_HeII
-
-                # Collisional Ionization cooling (Shapiro & Kang 1987, Cen 1992)
-                cool_colion_HI =   (1.27E-21 / (1.0 + csqrt(temp[c]/1.0E5))) * csqrt(temp[c]) * cexp(-157809.1/temp[c]) * edensity[r] * densitynH[r] * prof_YHI[r]
-                cool_colion_HeI =  (9.38E-22 / (1.0 + csqrt(temp[c]/1.0E5))) * csqrt(temp[c]) * cexp(-285335.4/temp[c]) * edensity[r] * densitynH[r] * prim_He * prof_YHeI[r]
-                cool_colion_HeII = (4.95E-22 / (1.0 + csqrt(temp[c]/1.0E5))) * csqrt(temp[c]) * cexp(-631515.0/temp[c]) * edensity[r] * densitynH[r] * prim_He * prof_YHeII[r]
-                cool_colion_HeS  = (5.01E-27 / (1.0 + csqrt(temp[c]/1.0E5))) * (temp[c]**-0.1687) * cexp(-55338.0/temp[c]) * edensity[r] * edensity[r] * densitynH[r] * prim_He * prof_YHeII[r]
-                cool_colion = cool_colion_HI+cool_colion_HeI+cool_colion_HeII+cool_colion_HeS
-
-                # Recombination cooling (Black 1981, Spitzer 1978)
-                cool_rec_HII   = 8.70E-27 * csqrt(temp[c]) * ((temp[c]/1.0E3)**-0.2) * (1.0/(1.0+(temp[c]/1.0E6)**0.7)) * edensity[r] * (1.0-prof_YHI[r])*densitynH[r]
-                cool_rec_HeII  = 1.55E-26 * (temp[c]**0.3647) * edensity[r] * densitynH[r] * prim_He * prof_YHeII[r]
-                cool_rec_HeIII = 3.48E-26 * csqrt(temp[c]) * ((temp[c]/1.0E3)**-0.2) * (1.0/(1.0+(temp[c]/1.0E6)**0.7)) * edensity[r] * (1.0-prof_YHeI[r]-prof_YHeII[r]) * prim_He * densitynH[r]
-                cool_rec = cool_rec_HII+cool_rec_HeII+cool_rec_HeIII
-
-                # Dielectric recombination cooling fo He II (Cen 1992)
-                cool_diel = 1.24E-13 * (temp[c]**-1.5) * (1.0 + 0.3*cexp(-94000.0/temp[c])) * cexp(-470000.0/temp[c]) * edensity[r] * densitynH[r] * prim_He * prof_YHeII[r]
-
-                # Bremsstrahlung cooling (Black 1981, Spitzer & Hart 1979)
-                cool_brem = 1.43E-27 * csqrt(temp[c]) * (1.1 + 0.34*cexp(-((5.5-clog10(temp[c]))**2.0)/3.0)) * edensity[r] * ((1.0-prof_YHI[r])*densitynH[r] + prof_YHeII[r]*prim_He*densitynH[r] + (1.0-prof_YHeI[r]-prof_YHeII[r])*prim_He*densitynH[r])
-
-                # Compton cooling or heating (Peebles 1971)
-                cool_comp = 5.65E-36 * ((1.0+redshift)**4) * (temp[c] - 2.73*(1.0+redshift)) * edensity[r]
-
-                total_cool = (cool_colexc + cool_colion + cool_rec + cool_diel + cool_brem + cool_comp)
-                coolfunc[c] = total_cool
-
-                if r==0:
-                    coolfuncL[c] = total_cool
-
-                if (c == sz_c-1) and (total_heat[r]-total_cool > 0.0): # Total heat was always above the cooling function -- set the temperature to the maximum
-                    eflag = 1
-                    cmin = sz_c-1
-                    break
-                if total_heat[r]-total_cool < 0.0:
-                    break
-                if c == 0:
-                    cmin = 0
-                    dtmp = total_heat[r] - total_cool
-                    dmin = total_heat[r] - total_cool
-                    if dmin < 0.0: dmin *= -1.0
-                else:
-                    dtmp = total_heat[r] - total_cool
-                    if dtmp < 0.0: dtmp *= -1.0
-                    if dtmp < dmin:
-                        cmin = c
-                        dmin = dtmp
-            if cmin == 0:
-                prof_temperature[r] = temp[cmin]
-            elif cmin == sz_c-1:
-                prof_temperature[r] = temp[cmin]
-            else:
-                gradval = (coolfunc[cmin+1]-coolfunc[cmin])/(temp[cmin+1]-temp[cmin])
-                if gradval == 0.0:
-                    prof_temperature[r] = 0.5*(temp[cmin+1]-temp[cmin])
-                    with gil:
-                        np.savetxt("gradvalzero_cmin"+str(cmin)+".dat",np.transpose((temp,coolfunc)))
-                else:
-                    prof_temperature[r] = (total_heat[r]-(coolfunc[cmin]-gradval*temp[cmin]))/gradval
-    if eflag == 1: print "ERROR :: HEATING RATE WAS HIGHER THAN THE COOLING RATE!"
-    return np.asarray(prof_temperature)
-
-
-@cython.wraparound(False)
-@cython.boundscheck(False)
-@cython.cdivision(True) 
-def thermal_equilibrium_full(double[::1] total_heat not None,
-                             double[::1] old_temp not None,
-                             double[::1] edensity not None,
-                             double[::1] densitynH not None,
-                             double[::1] prof_YHI not None,
-                             double[::1] prof_YHeI not None,
-                             double[::1] prof_YHeII not None,
-                             double prim_He, double redshift):
-    """
-    Calculate the temperature corresponding to an equal heating and cooling rate in each shell
-    The following rates are mostly compiled from a combination of Cen (1992) and Anninos (1997)
-    """
-    cdef int sz_r, eflag
-    cdef int r, c, dmin
+    cdef int sz_r
+    cdef int r, c
     cdef double btmp, dtmp, dtst, pcool, gradval
     cdef double cool_colexc_HI, cool_colexc_HeI, cool_colexc_HeII, cool_colexc
     cdef double cool_colion_HI, cool_colion_HeI, cool_colion_HeII, cool_colion_HeS, cool_colion
@@ -669,13 +559,10 @@ def thermal_equilibrium_full(double[::1] total_heat not None,
     cdef double cool_diel, cool_brem, cool_comp, total_cool
 
     sz_r  = total_heat.shape[0]
-    cdef double[::1] prof_temperature = np.zeros((sz_r), dtype=DTYPE)
 
-    # Generate a range of temperatures that the code is allowed to use:
     cdef int sz_c = 1000
     cdef double[::1] temp = np.logspace(3.0,6.0,sz_c)
-    cdef double[::1] coolfunc = np.zeros((sz_c), dtype=DTYPE)
-    cdef double[::1] coolfuncL = np.zeros((sz_c), dtype=DTYPE)
+    cdef double[:,::1] coolfunc = np.empty((sz_r, sz_c), dtype=DTYPE)
 
     with nogil:
         eflag = 0 # No error
@@ -710,10 +597,39 @@ def thermal_equilibrium_full(double[::1] total_heat not None,
                 cool_comp = 5.65E-36 * ((1.0+redshift)**4) * (temp[c] - 2.73*(1.0+redshift)) * edensity[r]
 
                 total_cool = (cool_colexc + cool_colion + cool_rec + cool_diel + cool_brem + cool_comp)
-                coolfunc[c] = total_cool
+                coolfunc[r,c] = total_cool
+
+    return np.asarray(coolfunc)
+
+@cython.wraparound(False)
+@cython.boundscheck(False)
+@cython.cdivision(True) 
+def thermal_equilibrium_full(double[::1] total_heat not None,
+                             double[:,::1] total_cool not None,
+                             double[::1] old_temp not None):
+    """
+    Calculate the temperature corresponding to an equal heating and cooling rate in each shell
+    The following rates are mostly compiled from a combination of Cen (1992) and Anninos (1997)
+    """
+    cdef int sz_r, sz_c, eflag
+    cdef int r, c, dmin
+    cdef double btmp, dtmp, dtst, pcool, gradval
+    
+    sz_r = total_heat.shape[0]
+    sz_c = total_cool.shape[1]
+    cdef double[::1] prof_temperature = np.zeros((sz_r), dtype=DTYPE)
+
+    # Generate a range of temperatures that the code is allowed to use:
+    cdef double[::1] temp = np.logspace(3.0,6.0,sz_c)
+    cdef double[::1] coolfuncL = np.zeros((sz_c), dtype=DTYPE)
+
+    with nogil:
+        eflag = 0 # No error
+        for r in range(0,sz_r):
+            for c in range(0,sz_c):
 
                 if r==0:
-                    coolfuncL[c] = total_cool
+                    coolfuncL[c] = total_cool[0,c]
 
                 if (c == sz_c-1) and (dmin == -1):
                     eflag = 1
@@ -722,7 +638,7 @@ def thermal_equilibrium_full(double[::1] total_heat not None,
                 if c == 0:
                     dmin = -1
                 else:
-                    if (total_heat[r]>=pcool) and (total_heat[r]<total_cool):
+                    if (total_heat[r]>=pcool) and (total_heat[r]<total_cool[r,c]):
                         if dmin == -1:
                             dmin = c-1
                             dtmp = temp[dmin]
@@ -736,7 +652,7 @@ def thermal_equilibrium_full(double[::1] total_heat not None,
                                 dtmp = temp[dmin]
                                 btmp = old_temp[r]-temp[dmin]
                                 if btmp < 0.0: btmp *= -1.0
-                    elif (total_heat[r]<=pcool) and (total_heat[r]>total_cool):
+                    elif (total_heat[r]<=pcool) and (total_heat[r]>total_cool[r,c]):
                         if dmin == -1:
                             dmin = c-1
                             dtmp = temp[dmin]
@@ -750,19 +666,19 @@ def thermal_equilibrium_full(double[::1] total_heat not None,
                                 dtmp = temp[dmin]
                                 btmp = old_temp[r]-temp[dmin]
                                 if btmp < 0.0: btmp *= -1.0
-                pcool = total_cool
+                pcool = total_cool[r,c]
             if dmin == -1:
                 prof_temperature[r] = temp[dmin]
             elif dmin == sz_c-1:
                 prof_temperature[r] = temp[dmin]
             else:
-                gradval = (coolfunc[dmin+1]-coolfunc[dmin])/(temp[dmin+1]-temp[dmin])
+                gradval = (total_cool[r,dmin+1]-total_cool[r,dmin])/(temp[dmin+1]-temp[dmin])
                 if gradval == 0.0:
                     prof_temperature[r] = 0.5*(temp[dmin+1]-temp[dmin])
-                    with gil:
-                        np.savetxt("gradvalzero_dmin"+str(dmin)+".dat",np.transpose((temp,coolfunc)))
+                    #with gil:
+                    #    np.savetxt("gradvalzero_dmin"+str(dmin)+".dat",np.transpose((temp,coolfunc)))
                 else:
-                    prof_temperature[r] = (total_heat[r]-(coolfunc[dmin]-gradval*temp[dmin]))/gradval
+                    prof_temperature[r] = (total_heat[r]-(total_cool[r,dmin]-gradval*temp[dmin]))/gradval
     if eflag == 1: print "ERROR :: HEATING RATE WAS LOWER/HIGHER THAN THE COOLING RATE FUNCTION!"
     return np.asarray(prof_temperature)
 
