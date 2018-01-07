@@ -583,7 +583,7 @@ def get_halo(hmodel,redshift,gastemp,bturb,metals=1.0,Hescale=1.0,cosmopar=np.ar
         prof_eps  = 4.0*np.pi * cython_fns.phheatrate_allion(jnurarr, phelxs, nuzero, ionlvl, planck)
         prof_phionheatrate = np.zeros(npts,dtype=np.float)
         for j in range(nions):
-            prof_phionheatrate += prof_eps[:,j]*densitynH*elID[ions[j]].abund*Yprofs[j]
+            prof_phionheatrate += prof_eps[j]*densitynH*elID[ions[j]].abund*Yprofs[j]
         # Secondary electron photoheating rate (Shull & van Steenberg 1985)
         heat_HI  = 4.0*np.pi * cython_fns.scdryheatrate(jnurarr,nuzero,phelxs[elID["H I"].id],electrondensity/(densitynH*(1.0+2.0*prim_He)), elID["H I"].ip, elID["D I"].ip, elID["He I"].ip, planck, elvolt, 0)
         heat_HeI = 4.0*np.pi * cython_fns.scdryheatrate(jnurarr,nuzero,phelxs[elID["He I"].id],electrondensity/(densitynH*(1.0+2.0*prim_He)), elID["H I"].ip, elID["D I"].ip, elID["He I"].ip, planck, elvolt, 2)

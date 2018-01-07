@@ -318,7 +318,7 @@ def phheatrate_allion(double[:,::1] jnur not None,
     sz_r  = jnur.shape[1]
     sz_nu = xsec.shape[1]
 
-    cdef double[:,::1] retarr = np.zeros((sz_r,sz_i), dtype=DTYPE)
+    cdef double[:,::1] retarr = np.zeros((sz_i,sz_r), dtype=DTYPE)
 
     #print "Performing numerical integration over frequency"
     with nogil:
@@ -327,7 +327,7 @@ def phheatrate_allion(double[:,::1] jnur not None,
                 nint = 0.0
                 for nu in range(0,sz_nu-1):
                     nint += 0.5*(xsec[i,nu]*jnur[nu,r]*(planck*(nuarr[nu]-nuion[i]))/(planck*nuarr[nu]) + xsec[i,nu+1]*jnur[nu+1,r]*(planck*(nuarr[nu+1]-nuion[i]))/(planck*nuarr[nu+1])) * (nuarr[nu+1]-nuarr[nu])
-                retarr[r,i] = nint
+                retarr[i,r] = nint
     return np.asarray(retarr)
 
 
