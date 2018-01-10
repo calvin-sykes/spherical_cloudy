@@ -134,6 +134,9 @@ def get_halo(hmodel,redshift,gastemp,bturb,metals=1.0,Hescale=1.0,cosmopar=np.ar
     geomscale = options["geomscale"]
     radmethod = 2  # Method used to define the radial coordinate
 
+    # boundary condition to use
+    use_pcon = options["force_P"]
+    
      # Set up the cosmology
     cosmoVal = FlatLambdaCDM(H0=100.0*cosmopar[0] * u.km / u.s / u.Mpc, Om0=cosmopar[3])
     hubb_time = cosmoVal.age(redshift).to(u.s).value
@@ -333,9 +336,17 @@ def get_halo(hmodel,redshift,gastemp,bturb,metals=1.0,Hescale=1.0,cosmopar=np.ar
                 print "        :: Assuming no turbulent pressure for this iteration"
                 temp_densitynH = prof_pressure / (1.5 * kB * prof_temperature * dof)
             temp_densitynH /= temp_densitynH[0]
-            rintegral = cython_fns.mass_integral(temp_densitynH,radius,hmodel.rvir)
-            cen_density = barymass / (4.0 * np.pi * protmss * (1.0 + 4.0*prim_He) * rintegral)
-            densitynH = cen_density * temp_densitynH
+            if use_pcon:
+                # assume outermost density value is equal to mean background density
+                # and use as scaling factor to get density in physical units
+                bkdens = 10**(-6.7)
+                dens_scale = bkdens / temp_densitynH[-1]
+            else:
+                # constrain central density by requiring total mass
+                # to match that obtained from the baryon fraction data
+                rintegral = calc_Jnur.mass_integral(temp_densitynH,radius,virialr)
+                dens_scale = barymass / (4.0 * np.pi * protmss * (1.0 + 4.0*prim_He) * rintegral)
+            densitynH = dens_scale * temp_densitynH
             densitym  = densitynH * protmss * (1.0 + 4.0*prim_He)
 
         # Update the volume density of the unionized species

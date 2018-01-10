@@ -46,7 +46,7 @@ options["run"]["concrit"] = 1.0E-3
 options["run"]["maxiter"] = 500
 options["run"]["outdir"] = "test" # PUT RUN NAME HERE
 options["geometry"] = "NFW"
-options["geomscale"] = 10
+options["geomscale"] = 100
 #options["radfield"] = "PLm1d5_IPm6"
 options["radfield"] = "HM12"
 options["HMscale"] = 1.0
@@ -59,6 +59,8 @@ Gcons = options["const"]["Gcons"]
 somtog = options["const"]["somtog"]
 hubpar = cosmo.hubblepar(redshift, cosmopar)
 rhocrit = 3.0*(hubpar*hztos)**2/(8.0*np.pi*Gcons)
+
+options["force_P"] = True
 
 # get_halo returns the name of the file it writes the output to
 # so that it can be passed back on the next loop iteration to use as an intitial solution
