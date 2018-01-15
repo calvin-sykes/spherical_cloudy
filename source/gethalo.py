@@ -670,12 +670,14 @@ def get_halo(hmodel,redshift,gastemp,bturb,metals=1.0,Hescale=1.0,cosmopar=np.ar
             fig_dens = plt.figure()
             fig_ypr = plt.figure()
             fig_nhT = plt.figure()
+            fig_T = plt.figure()
             plt.ion()
 
-        if (iteration % 10 == 0):
+        if (iteration % 10 == 0 or iteration > 100):
             fig_dens.clear()
             fig_ypr.clear()
             fig_nhT.clear()
+            fig_T.clear()
 
             ax_dens = fig_dens.gca()
             ax_dens.plot(np.log10(radius*cmtopc), np.log10(densitynH))
@@ -697,6 +699,11 @@ def get_halo(hmodel,redshift,gastemp,bturb,metals=1.0,Hescale=1.0,cosmopar=np.ar
             fig_nhT.canvas.draw_idle()
             fig_nhT.show()
 
+            ax_T = fig_T.gca()
+            ax_T.plot(np.log10(densitynH), np.log10(prof_temperature))
+            fig_T.canvas.draw_idle()
+            fig_T.show()
+
             plt.pause(0.01)
 
         # combined eqbm / hubble temperatures
@@ -716,11 +723,11 @@ def get_halo(hmodel,redshift,gastemp,bturb,metals=1.0,Hescale=1.0,cosmopar=np.ar
         if True:
             tmptemp = old_temperature-prof_temperature
             tmpsign = np.sign(tmptemp)
-            tmptemp[np.where(np.abs(tmptemp)>100.0)] = 100.0
+            tmptemp[np.where(np.abs(tmptemp)>500.0)] = 500.0
             tmptemp = np.abs(tmptemp)*tmpsign
             prof_temperature = old_temperature-tmptemp
 
-        if iteration >= 100 and iteration%1 == 0:
+        if iteration >= 150 and iteration%1 == 0:
             print "Averaging the stored Yprofs"
             Yprofs = np.mean(store_Yprofs, axis=2)
             #Yprofs = uniform_filter1d(Yprofs, 5, axis=0)
