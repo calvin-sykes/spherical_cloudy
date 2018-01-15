@@ -13,6 +13,8 @@ ctypedef np.float_t DTYPE_t
 ITYPE = np.int64
 ctypedef np.int_t ITYPE_t
 
+from cpython cimport bool
+
 cdef extern from "math.h":
     double csqrt "sqrt" (double) nogil
     double cexp "exp" (double) nogil
@@ -552,20 +554,18 @@ def cool_rate(double[::1] total_heat not None,
 
     cdef int sz_r
     cdef int r, c
-    cdef double btmp, dtmp, dtst, pcool, gradval
     cdef double cool_colexc_HI, cool_colexc_HeI, cool_colexc_HeII, cool_colexc
     cdef double cool_colion_HI, cool_colion_HeI, cool_colion_HeII, cool_colion_HeS, cool_colion
     cdef double cool_rec_HII, cool_rec_HeII, cool_rec_HeIII, cool_rec
-    cdef double cool_diel, cool_brem, cool_comp, total_cool
+    cdef double cool_diel, gf, cool_brem, cool_comp, total_cool
 
     sz_r  = total_heat.shape[0]
 
     cdef int sz_c = 1000
     cdef double[::1] temp = np.logspace(3.0,6.0,sz_c)
-    cdef double[:,::1] coolfunc = np.empty((sz_r, sz_c), dtype=DTYPE)
+    cdef double[:,::1] coolfunc = np.zeros((sz_r, sz_c), dtype=DTYPE)
 
     with nogil:
-        eflag = 0 # No error
         for r in range(0,sz_r):
             for c in range(0,sz_c):
                 # Collisional excitation cooling (Black 1981, Cen 1992)
@@ -591,7 +591,8 @@ def cool_rate(double[::1] total_heat not None,
                 cool_diel = 1.24E-13 * (temp[c]**-1.5) * (1.0 + 0.3*cexp(-94000.0/temp[c])) * cexp(-470000.0/temp[c]) * edensity[r] * densitynH[r] * prim_He * prof_YHeII[r]
 
                 # Bremsstrahlung cooling (Black 1981, Spitzer & Hart 1979)
-                cool_brem = 1.43E-27 * csqrt(temp[c]) * (1.1 + 0.34*cexp(-((5.5-clog10(temp[c]))**2.0)/3.0)) * edensity[r] * ((1.0-prof_YHI[r])*densitynH[r] + prof_YHeII[r]*prim_He*densitynH[r] + (1.0-prof_YHeI[r]-prof_YHeII[r])*prim_He*densitynH[r])
+                gf = (1.1 + 0.34*cexp(-((5.5-clog10(temp[c]))**2.0)/3.0))
+                cool_brem = 1.43E-27 * csqrt(temp[c]) * gf  * edensity[r] * ((1.0-prof_YHI[r])*densitynH[r] + prof_YHeII[r]*prim_He*densitynH[r] + (1.0-prof_YHeI[r]-prof_YHeII[r])*prim_He*densitynH[r])
 
                 # Compton cooling or heating (Peebles 1971)
                 cool_comp = 5.65E-36 * ((1.0+redshift)**4) * (temp[c] - 2.73*(1.0+redshift)) * edensity[r]
@@ -615,22 +616,17 @@ def thermal_equilibrium_full(double[::1] total_heat not None,
     cdef int r, c, dmin
     cdef double btmp, dtmp, dtst, pcool, gradval
     
-    sz_r = total_heat.shape[0]
+    sz_r = total_cool.shape[0]
     sz_c = total_cool.shape[1]
     cdef double[::1] prof_temperature = np.zeros((sz_r), dtype=DTYPE)
 
     # Generate a range of temperatures that the code is allowed to use:
     cdef double[::1] temp = np.logspace(3.0,6.0,sz_c)
-    cdef double[::1] coolfuncL = np.zeros((sz_c), dtype=DTYPE)
 
     with nogil:
         eflag = 0 # No error
         for r in range(0,sz_r):
             for c in range(0,sz_c):
-
-                if r==0:
-                    coolfuncL[c] = total_cool[0,c]
-
                 if (c == sz_c-1) and (dmin == -1):
                     eflag = 1
                     dmin = 0
@@ -686,6 +682,56 @@ def thermal_equilibrium_full(double[::1] total_heat not None,
 @cython.wraparound(False)
 @cython.boundscheck(False)
 @cython.cdivision(True) 
+def thermal_equilibrium_hubble(double[::1] total_heat not None,
+                               double[:,::1] total_cool not None,
+                               double[:,::1] hubb_rates not None):
+    cdef int sz_r, sz_c, eflag
+    cdef int r, c, dmin
+    cdef double pdiff, gradval
+
+    sz_r = total_cool.shape[0]
+    sz_c = total_cool.shape[1]
+    cdef double[::1] hubb_cool = np.zeros((sz_c), dtype=DTYPE)
+    cdef double[::1] prof_temperature = np.zeros((sz_r), dtype=DTYPE)
+
+    # Generate a range of temperatures that the code is allowed to use:
+    cdef double[::1] temp = np.logspace(3.0,6.0,sz_c)
+
+    eflag = 0
+    for r in range(0, sz_r):
+        minoff = 1e10
+        for c in range(0, sz_c):
+            hubb_cool[c] = total_heat[r] - hubb_rates[r,c]
+            if (c == sz_c-1) and (dmin == -1):
+                eflag = 1
+                dmin = 0
+                break
+            if c == 0:
+                dmin = -1
+            else:
+                # looking for point when hubb_cool - total_cool changes sign
+                # point of equality lies between
+                # dmin is the lower bound on the equality point
+                if ((hubb_cool[c] - total_cool[r,c]) * pdiff) < 0.0:
+                    dmin = c - 1
+            pdiff = hubb_cool[c] - total_cool[r,c] # 'previous' value of difference
+        if dmin == 0:
+            prof_temperature[r] = temp[dmin]
+        elif dmin == sz_c - 1:
+            prof_temperature[r] = temp[dmin]
+        else:
+            # gradient dcool/dT
+            gradval = ((hubb_cool[dmin+1] - total_cool[r, dmin+1]) - (hubb_cool[dmin] - total_cool[r, dmin])) / (temp[dmin+1] - temp[dmin])
+            if gradval == 0.0:
+                prof_temperature[r] = 0.5 * (temp[dmin+1] - temp[dmin])
+            else:
+                prof_temperature[r] = temp[dmin] - (hubb_cool[dmin] - total_cool[r, dmin]) / gradval
+    if eflag == 1: print "ERROR :: HEATING RATE WAS LOWER/HIGHER THAN THE COOLING RATE FUNCTION!"
+    return np.asarray(prof_temperature)
+
+@cython.wraparound(False)
+@cython.boundscheck(False)
+@cython.cdivision(True)
 def calc_xsec_energy(double[::1] xsec not None,
                      double[::1] xsecengy not None,
                      double[::1] energy not None):

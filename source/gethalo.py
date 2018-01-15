@@ -602,19 +602,110 @@ def get_halo(hmodel,redshift,gastemp,bturb,metals=1.0,Hescale=1.0,cosmopar=np.ar
         for j in range(nions):
             prof_phionheatrate += prof_eps[j]*densitynH*elID[ions[j]].abund*Yprofs[j]
         # Secondary electron photoheating rate (Shull & van Steenberg 1985)
-        heat_HI  = 4.0*np.pi * cython_fns.scdryheatrate(jnurarr,nuzero,phelxs[elID["H I"].id],electrondensity/(densitynH*(1.0+2.0*prim_He)), elID["H I"].ip, elID["D I"].ip, elID["He I"].ip, planck, elvolt, 0)
-        heat_HeI = 4.0*np.pi * cython_fns.scdryheatrate(jnurarr,nuzero,phelxs[elID["He I"].id],electrondensity/(densitynH*(1.0+2.0*prim_He)), elID["H I"].ip, elID["D I"].ip, elID["He I"].ip, planck, elvolt, 2)
-        scdry_heat_rate = heat_HI*densitynH*Yprofs[elID["H I"].id] + heat_HeI*densitynH*prim_He*Yprofs[elID["He I"].id]
+        #heat_HI  = 4.0*np.pi * cython_fns.scdryheatrate(jnurarr,nuzero,phelxs[elID["H I"].id],electrondensity/(densitynH*(1.0+2.0*prim_He)), elID["H I"].ip, elID["D I"].ip, elID["He I"].ip, planck, elvolt, 0)
+        #heat_HeI = 4.0*np.pi * cython_fns.scdryheatrate(jnurarr,nuzero,phelxs[elID["He I"].id],electrondensity/(densitynH*(1.0+2.0*prim_He)), elID["H I"].ip, elID["D I"].ip, elID["He I"].ip, planck, elvolt, 2)
+        #scdry_heat_rate = heat_HI*densitynH*Yprofs[elID["H I"].id] + heat_HeI*densitynH*prim_He*Yprofs[elID["He I"].id]
 
         # Finally, the total heating rate is:
-        total_heat = prof_phionheatrate + scdry_heat_rate
+        total_heat = prof_phionheatrate #+ scdry_heat_rate
 
         print "Calculating cooling rate"
+        # cooling rate evaluated at range of temperatures [rad_coord, temp_coord] 
         total_cool = cython_fns.cool_rate(total_heat, electrondensity, densitynH, Yprofs[elID["H I"].id], Yprofs[elID["He I"].id], Yprofs[elID["He II"].id], prim_He, redshift)
-        
+
         print "Deriving the temperature profile"
         old_temperature = prof_temperature.copy()
-        prof_temperature = cython_fns.thermal_equilibrium_full(total_heat, total_cool, old_temperature)
+
+        # Copy the total heat data for each temperature bin in the cooling function
+        total_heat_2d = total_heat.reshape((1000,1)).repeat(1000,axis=1)
+
+        # difference of normalised rates as per Appendix B, Theuns+ 98
+        # NB these rates have an extra factor of n_H^2 compared with defns there
+        net_rate = np.abs(total_heat_2d - total_cool) / densitynH**2
+
+        # Equilibrium is achieved when absolute value of net rate is minimised
+        loc_eqbm = np.argmin(net_rate, axis=1)
+        temp = np.logspace(3, 6, 1000)
+        prof_temperature = temp[loc_eqbm]
+
+        # temperatures from thermal equilibrium
+        #plt.plot(np.log10(densitynH),np.log10(prof_temperature))
+        #plt.show()
+
+        # Copy temperature range for each radial bin
+        temp_2d = temp.reshape((1,1000)).repeat(1000,axis=0)
+            
+        # net rates such that the cooling time equals the Hubble time
+        hubb_rates = (3 * kB * protmss * (densitynH**2) / (2 * masspp * densitym*(1-prim_He)**2*hubb_time)).reshape((1000,1)).repeat(1000,axis=1) * temp_2d
+
+        # cooling rates
+        hubb_cool = total_heat_2d - hubb_rates 
+        #plt.plot(np.log10(temp), np.log10(hubb_cool))
+        #plt.show()
+
+        #plt.plot(np.log10(temp), np.log10(hubb_cool[0]), label='Hubb')
+        #plt.plot(np.log10(temp), np.log10(total_cool[0]), label='Cool')
+        #plt.plot(np.log10(temp), np.log10(total_heat_2d[0]), label='Heat')
+        #plt.plot(np.log10(temp), np.log10(np.abs(hubb_rates - total_cool)[0]), label='Diff')
+        #plt.legend()
+        #plt.show()
+
+        # discretise to cooling function to find corresponding temperatures
+        #loc_eqbm_hubb = np.argmin(np.abs(hubb_cool - total_cool), axis=1)
+        #hubb_temps = temp[loc_eqbm_hubb]
+        #prof_temperature = hubb_temps
+
+        prof_temperature = cython_fns.thermal_equilibrium_hubble(total_heat, total_cool, hubb_rates)
+        #plt.plot(np.log10(densitynH), np.log10(prof_temperature))
+        #plt.plot(np.log10(densitynH), np.log10(hubb_temps))
+        #plt.show()
+        #plt.show()
+    
+        #prof_temperature = hubb_temps #np.where(loc_hubble, hubb_temps, prof_temperature)
+
+        #plt.plot(np.log10(radius * cmtopc), np.log10(prof_temperature))
+        #plt.show()
+
+        if(iteration==1):
+            fig_dens = plt.figure()
+            fig_ypr = plt.figure()
+            fig_nhT = plt.figure()
+            plt.ion()
+
+        if (iteration % 10 == 0):
+            fig_dens.clear()
+            fig_ypr.clear()
+            fig_nhT.clear()
+
+            ax_dens = fig_dens.gca()
+            ax_dens.plot(np.log10(radius*cmtopc), np.log10(densitynH))
+            fig_dens.canvas.draw_idle()
+            fig_dens.show()
+
+            ax_ypr = fig_ypr.gca()
+            ax_ypr.plot(np.log10(radius*cmtopc), np.log10(Yprofs[elID["H I"].id]), label="HI")
+            ax_ypr.plot(np.log10(radius*cmtopc), np.log10(Yprofs[elID["D I"].id]), label="DI")
+            ax_ypr.plot(np.log10(radius*cmtopc), np.log10(Yprofs[elID["He I"].id]), label="HeI")
+            ax_ypr.plot(np.log10(radius*cmtopc), np.log10(Yprofs[elID["He II"].id]), label="HeII")
+            ax_ypr.legend()
+            fig_ypr.canvas.draw_idle()
+            fig_ypr.show()
+
+            ax_nhT = fig_nhT.gca()
+            ax_nhT.plot(np.log10(densitynH), np.log10(prof_temperature))
+            ax_nhT.plot(np.log10(densitynH), np.log10(1E4 * (densitynH / 10**-6)**0.54))
+            fig_nhT.canvas.draw_idle()
+            fig_nhT.show()
+
+            plt.pause(0.01)
+
+        # combined eqbm / hubble temperatures
+#        plt.plot(np.log10(radius * cmtopc),np.log10(prof_temperature))
+#        plt.plot(np.log10(radius * cmtopc),np.log10(cython_fns.thermal_equilibrium_full(total_heat, total_cool, old_temperature)))
+#plt.show()
+
+        #prof_temperature = cython_fns.thermal_equilibrium_full(total_heat, total_cool, old_temperature)
+
         if np.size(np.where(prof_temperature<=1000.0001)[0]) != 0:
             print "ERROR :: Profile temperature was estimated to be <= 1000 K"
             print "         The code is not currently designed to work in this regime"
@@ -651,6 +742,10 @@ def get_halo(hmodel,redshift,gastemp,bturb,metals=1.0,Hescale=1.0,cosmopar=np.ar
         if iteration > maxiter:
             print "Break outer loop at maxiter={0:d} iterations, STATUS:".format(maxiter)
             break
+    ## END MAIN LOOP
+    
+    plt.plot(np.log10(densitynH), np.log10(prof_temperature))
+    plt.show()
 
     # Calculate the density profiles
     print "Calculating volume density profiles"
