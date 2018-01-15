@@ -344,7 +344,7 @@ def get_halo(hmodel,redshift,gastemp,bturb,metals=1.0,Hescale=1.0,cosmopar=np.ar
             else:
                 # constrain central density by requiring total mass
                 # to match that obtained from the baryon fraction data
-                rintegral = calc_Jnur.mass_integral(temp_densitynH,radius,virialr)
+                rintegral = cython_fns.mass_integral(temp_densitynH,radius,hmodel.rvir)
                 dens_scale = barymass / (4.0 * np.pi * protmss * (1.0 + 4.0*prim_He) * rintegral)
             densitynH = dens_scale * temp_densitynH
             densitym  = densitynH * protmss * (1.0 + 4.0*prim_He)
@@ -700,7 +700,7 @@ def get_halo(hmodel,redshift,gastemp,bturb,metals=1.0,Hescale=1.0,cosmopar=np.ar
             fig_nhT.show()
 
             ax_T = fig_T.gca()
-            ax_T.plot(np.log10(densitynH), np.log10(prof_temperature))
+            ax_T.plot(np.log10(radius*cmtopc), np.log10(prof_temperature))
             fig_T.canvas.draw_idle()
             fig_T.show()
 
@@ -723,11 +723,12 @@ def get_halo(hmodel,redshift,gastemp,bturb,metals=1.0,Hescale=1.0,cosmopar=np.ar
         if True:
             tmptemp = old_temperature-prof_temperature
             tmpsign = np.sign(tmptemp)
-            tmptemp[np.where(np.abs(tmptemp)>500.0)] = 500.0
+            lim = 500 / (np.log10(iteration) + 1)
+            tmptemp[np.where(np.abs(tmptemp)>lim)] = lim
             tmptemp = np.abs(tmptemp)*tmpsign
             prof_temperature = old_temperature-tmptemp
 
-        if iteration >= 150 and iteration%1 == 0:
+        if iteration >= 100 and iteration%1 == 0:
             print "Averaging the stored Yprofs"
             Yprofs = np.mean(store_Yprofs, axis=2)
             #Yprofs = uniform_filter1d(Yprofs, 5, axis=0)
