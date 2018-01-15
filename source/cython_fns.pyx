@@ -579,7 +579,7 @@ def cool_rate(double[::1] total_heat not None,
                 cool_colion_HeI =  (9.38E-22 / (1.0 + csqrt(temp[c]/1.0E5))) * csqrt(temp[c]) * cexp(-285335.4/temp[c]) * edensity[r] * densitynH[r] * prim_He * prof_YHeI[r]
                 cool_colion_HeII = (4.95E-22 / (1.0 + csqrt(temp[c]/1.0E5))) * csqrt(temp[c]) * cexp(-631515.0/temp[c]) * edensity[r] * densitynH[r] * prim_He * prof_YHeII[r]
                 cool_colion_HeS  = (5.01E-27 / (1.0 + csqrt(temp[c]/1.0E5))) * (temp[c]**-0.1687) * cexp(-55338.0/temp[c]) * edensity[r] * edensity[r] * densitynH[r] * prim_He * prof_YHeII[r]
-                cool_colion = cool_colion_HI+cool_colion_HeI+cool_colion_HeII+cool_colion_HeS
+                cool_colion = (cool_colion_HI+cool_colion_HeI+cool_colion_HeII+cool_colion_HeS) * 2
 
                 # Recombination cooling (Black 1981, Spitzer 1978)
                 cool_rec_HII   = 8.70E-27 * csqrt(temp[c]) * ((temp[c]/1.0E3)**-0.2) * (1.0/(1.0+(temp[c]/1.0E6)**0.7)) * edensity[r] * (1.0-prof_YHI[r])*densitynH[r]
