@@ -12,7 +12,7 @@ gastemp = 20000.0
 
 mn_mvir = 8.0
 mx_mvir = 9.65
-nummvir = 21
+nummvir = 11
 
 mn_reds = 0.0
 mx_reds = 0.0
@@ -44,7 +44,7 @@ options["run"]["ncpus"]    = -1
 options["run"]["nummu"]    = 30
 options["run"]["concrit"] = 1.0E-3
 options["run"]["maxiter"] = 500
-options["run"]["outdir"] = "test" # PUT RUN NAME HERE
+options["run"]["outdir"] = "hubb_eqbm_auto" # PUT RUN NAME HERE
 options["geometry"] = "NFW"
 options["geomscale"] = 100
 #options["radfield"] = "PLm1d5_IPm6"
@@ -67,19 +67,18 @@ options["force_P"] = True
 prev_fname = None
 
 for i in range(nummvir):
-    for j in range(numreds):
-        print "#########################"
-        print "#########################"
-        print "  virialm  {0:d}/{1:d}".format(i+1,nummvir)
-        print "  redshift {0:d}/{1:d}".format(j+1,numreds)
+    for j in range(numreds):     
         for k in range(numbary):
-            print "  baryon scale {0:d}/{1:d}".format(k+1,numbary)
             concentration = cosmo.massconc_Prada12(10**virialm[i], cosmopar, redshift[j])
             model = halomodel.NFWHalo(10**virialm[i] * somtog, baryfrac[i] * baryscale[k], rhocrit, concentration)
             for l in range(numHMscl):
+                print "#########################"
+                print "#########################"
+                print "  virialm  {0:d}/{1:d}".format(i+1,nummvir)
+                print "  redshift {0:d}/{1:d}".format(j+1,numreds)
+                print "  baryon scale {0:d}/{1:d}".format(k+1,numbary)
                 print "  UVB scale {0:d}/{1:d}".format(l+1,numHMscl)
                 print "#########################"
                 print "#########################"
-
                 # Let's go!
                 prev_fname = gethalo.get_halo(model,redshift[j],gastemp,bturb,Hescale=1.0,metals=metals,cosmopar=cosmopar,ions=ions,prevfile=prev_fname,options=options)
