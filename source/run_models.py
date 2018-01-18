@@ -60,7 +60,17 @@ somtog = options["const"]["somtog"]
 hubpar = cosmo.hubblepar(redshift, cosmopar)
 rhocrit = 3.0*(hubpar*hztos)**2/(8.0*np.pi*Gcons)
 
+# Whether to impose external pressure condition
 options["force_P"] = True
+
+# Method used to derive temperature
+options["temp_method"] = "eagle"
+
+# equilibrium - always use thermal equilibrium
+# adiabatic - always use 1/rate = Hubble time
+# auto - choose between two above for each radius based on rates
+# eagle - use cooling rate table from Eagle
+# original - use Ryan's original thermal equilibrium function
 
 # get_halo returns the name of the file it writes the output to
 # so that it can be passed back on the next loop iteration to use as an intitial solution

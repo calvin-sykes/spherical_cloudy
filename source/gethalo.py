@@ -136,6 +136,9 @@ def get_halo(hmodel,redshift,gastemp,bturb,metals=1.0,Hescale=1.0,cosmopar=np.ar
 
     # boundary condition to use
     use_pcon = options["force_P"]
+
+    # method to derive temperature profile
+    temp_method = options["temp_method"]
     
      # Set up the cosmology
     cosmoVal = FlatLambdaCDM(H0=100.0*cosmopar[0] * u.km / u.s / u.Mpc, Om0=cosmopar[3])
@@ -223,7 +226,7 @@ def get_halo(hmodel,redshift,gastemp,bturb,metals=1.0,Hescale=1.0,cosmopar=np.ar
     chrgtran_HIItargs = chrgtranrate["H II"].keys()
     chrgtran_HeItargs = chrgtranrate["He I"].keys()
     chrgtran_HeIItargs = chrgtranrate["He II"].keys()
-
+    
     close=False
 
     # if string is passed, interpret as filename for the previous run
@@ -432,9 +435,9 @@ def get_halo(hmodel,redshift,gastemp,bturb,metals=1.0,Hescale=1.0,cosmopar=np.ar
         if ncpus > 1:
             async_results = []
             # H I
-            async_results.append(pool.apply_async(cython_fns.scdryrate, scdry_args + (0,))) # constants
+            async_results.append(pool.apply_async(cython_fns.scdryrate, scdry_args + (0,)))
             # He I
-            async_results.append(pool.apply_async(cython_fns.scdryrate, scdry_args + (2,))) # constants
+            async_results.append(pool.apply_async(cython_fns.scdryrate, scdry_args + (2,)))
             map(ApplyResult.wait, async_results)
 
             for j in range(nions):
@@ -616,32 +619,47 @@ def get_halo(hmodel,redshift,gastemp,bturb,metals=1.0,Hescale=1.0,cosmopar=np.ar
         print "Deriving the temperature profile"
         old_temperature = prof_temperature.copy()
 
-        # difference of normalised rates as per Appendix B, Theuns+ 98
-        # NB these rates have an extra factor of n_H^2 compared with defns there
-        net_rate = np.abs(total_heat[:, np.newaxis] - total_cool) / densitynH[:, np.newaxis]**2
+        if temp_method == 'original':
+            prof_temperature = cython_fns.thermal_equilibrium_full(total_heat, total_cool, old_temperature)
+        elif temp_method == 'eagle':
+            assert 0 # TODO
+        else:
+            # difference of normalised rates as per Appendix B, Theuns+ 98
+            # NB these rates have an extra factor of n_H^2 compared with defns there
+            net_rate = np.abs(total_heat[:, np.newaxis] - total_cool) / densitynH[:, np.newaxis]**2
 
-        # Equilibrium is achieved when absolute value of net rate is minimised
-        loc_eqbm = np.argmin(net_rate, axis=1)
-        temp = np.logspace(3, 6, 1000)
-        temp_eqbm = temp[loc_eqbm]
-            
-        # net rates such that the cooling time equals the Hubble time
-        hubb_rates = (3 * kB * protmss * (densitynH**2) / (2 * masspp * densitym*(1-prim_He)**2*hubb_time))[:, np.newaxis] * temp[np.newaxis, :]
+            # Equilibrium is achieved when absolute value of net rate is minimised
+            loc_eqbm = np.argmin(net_rate, axis=1)
+            temp = np.logspace(3, 6, 1000)
+            temp_eqbm = temp[loc_eqbm]
 
-        # cooling rate needed to produce above rates
-        hubb_cool = total_heat[:, np.newaxis] - hubb_rates 
+            if temp_method == 'equilibrium':
+                prof_temperature = temp_eqbm
+            else:
+                # net rates such that the cooling time equals the Hubble time
+                hubb_rates = (3 * kB * protmss * (densitynH**2) / (2 * masspp * densitym*(1-prim_He)**2*hubb_time))[:, np.newaxis] * temp[np.newaxis, :]
+
+                # cooling rate needed to produce above rates
+                hubb_cool = total_heat[:, np.newaxis] - hubb_rates 
         
-        # Temperatures from assuming net cooling time is equal to Hubble time
-        temp_hubb = cython_fns.thermal_equilibrium_hubble(total_heat, total_cool, hubb_rates)
+                # Temperatures from assuming net cooling time is equal to Hubble time
+                temp_hubb = cython_fns.thermal_equilibrium_hubble(total_heat, total_cool, hubb_rates)
 
-        # Which regime to use?
-        # Calculate individual cooling times for thermal eq.
-        # If less than Hubble time, use the equilibrium temperature
-        # Else, use Hubble-limited ones
-        t_cool = (3 * kB * protmss * temp_eqbm * densitynH**2) / (2 * masspp * densitym*(1-prim_He)**2*total_cool[range(total_cool.shape[0]),loc_eqbm])
-        prof_temperature = np.where(t_cool < hubb_time, temp_eqbm, temp_hubb)
+                if temp_method == 'hubble':
+                    prof_temperature = temp_hubb
+                elif temp_method == 'auto':
+                    # Which regime to use?
+                    # Calculate individual cooling times for thermal eq.
+                    # If less than Hubble time, use the equilibrium temperature
+                    # Else, use Hubble-limited ones
+                    t_cool = ((3 * kB * protmss * temp_eqbm * densitynH**2)
+                              / (2 * masspp * densitym*(1-prim_He)**2*total_cool[range(total_cool.shape[0]),loc_eqbm]))
+                    prof_temperature = np.where(t_cool < hubb_time, temp_eqbm, temp_hubb)
 
-        print "Equilibrium:", np.sum(t_cool < hubb_time), "Hubble:", np.sum(np.logical_not(t_cool < hubb_time))
+                    print "Equilibrium:", np.sum(t_cool < hubb_time), "Hubble:", np.sum(np.logical_not(t_cool < hubb_time))
+                else:
+                    print "Undefined temperature method"
+                    assert 0
         
         if False: #(iteration==1):
             fig_dens = plt.figure()
