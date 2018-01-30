@@ -131,6 +131,9 @@ def get_halo(hmodel,redshift,gastemp,bturb,metals=1.0,Hescale=1.0,cosmopar=np.ar
     protmss = options["const"]["protmss"]
     hztos   = options["const"]["hztos"]
 
+    # Maximum allowed column density
+    MAX_COL_DENS = 22.0
+
     geom = options["geometry"]
     geomscale = options["geomscale"]
     radmethod = 2  # Method used to define the radial coordinate
@@ -642,6 +645,7 @@ def get_halo(hmodel,redshift,gastemp,bturb,metals=1.0,Hescale=1.0,cosmopar=np.ar
         
         if temp_method == 'original':
             prof_temperature = cython_fns.thermal_equilibrium_full(total_heat, total_cool, old_temperature)
+
         elif temp_method == 'eagle':
             # Use interpolated net (heating-cooling)/n_H**2 rates from Wiersma, Schaye & Smith '09
             # discretise the density profile to find temperatures
@@ -658,7 +662,7 @@ def get_halo(hmodel,redshift,gastemp,bturb,metals=1.0,Hescale=1.0,cosmopar=np.ar
             loc_eqbm = np.argmin(np.abs(total_heat[:, np.newaxis] - total_cool), axis=1)
             prof_temperature = temp[loc_eqbm]
 
-        elif temp_method == 'hubble':
+        elif temp_method == 'adiabatic':
             # difference of normalised rates as per Appendix B, Theuns+ 98
             net_rate = np.abs(total_heat[:, np.newaxis] - total_cool) / densitynH[:, np.newaxis]**2
 
@@ -740,6 +744,8 @@ def get_halo(hmodel,redshift,gastemp,bturb,metals=1.0,Hescale=1.0,cosmopar=np.ar
             tmptemp = np.abs(tmptemp)*tmpsign
             prof_temperature = old_temperature-tmptemp
 
+        
+
         if iteration >= 100 and iteration%1 == 0:
             print "Averaging the stored Yprofs"
             Yprofs = np.mean(store_Yprofs, axis=2)
@@ -751,6 +757,10 @@ def get_halo(hmodel,redshift,gastemp,bturb,metals=1.0,Hescale=1.0,cosmopar=np.ar
             close = True
             break
             miniter += iteration
+
+        # Bail if a large H I column density has already been reached
+        if np.max(np.log10(prof_coldens[elID["H I"].id])) > MAX_COL_DENS:
+            return (False, "Column density limit reached")
 
         print "STATISTICS --"
         print "ION  INDEX   OLD VALUE    NEW VALUE   |OLD-NEW|"
@@ -829,17 +839,18 @@ def get_halo(hmodel,redshift,gastemp,bturb,metals=1.0,Hescale=1.0,cosmopar=np.ar
         tmpout = np.require(tmpout, 'C')
 
     np.save(outfname, tmpout)
-
-    # Stop the program if a large H I column density has already been reached
-    if np.max(np.log10(prof_coldens[elID["H I"].id])) > 22.0:
-        print "Terminating after maximum N(H I) has been reached"
-        sys.exit()
     
     # dispose of process pool
     if ncpus > 1:
         pool.close()
         pool.join()
 
-    # Return the output filename to be used as the input to the next iteration    
-    return outfname + '.npy'
+    # Stop the program if a large H I column density has already been reached
+    if np.max(np.log10(prof_coldens[elID["H I"].id])) > MAX_COL_DENS:
+        print "Terminating after maximum N(H I) has been reached"
+        sys.exit()
+
+    # Everything is OK
+    # Return True, and the output filename to be used as the input to the next iteration    
+    return (True, outfname + '.npy')
 
