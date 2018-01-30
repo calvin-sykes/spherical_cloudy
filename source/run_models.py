@@ -1,7 +1,8 @@
 import numpy as np
 import halomodel
 import gethalo
-import getoptions
+import options
+import constants
 import cosmo
 
 bturb = 3.0
@@ -39,7 +40,7 @@ baryfracvals = 10.0**barymass / 10.0**halomass
 baryfrac = np.interp(virialm, halomass, baryfracvals)
 
 # Set the options dictionary
-options = getoptions.default()
+options = options.default()
 # Overwrite the defaults
 options["run"]["nsample"]  = 1000
 options["run"]["ncpus"]    = -1
@@ -53,20 +54,22 @@ options["geomscale"] = 100
 options["radfield"] = "HM12"
 options["HMscale"] = 1.0
 
-# Get the working cosmology
-cosmopar = cosmo.get_cosmo()
-
-hztos = options["const"]["hztos"]
-Gcons = options["const"]["Gcons"]
-somtog = options["const"]["somtog"]
-hubpar = cosmo.hubblepar(redshift, cosmopar)
-rhocrit = 3.0*(hubpar*hztos)**2/(8.0*np.pi*Gcons)
-
 # Whether to impose external pressure condition
 options["force_P"] = True
 
 # Method used to derive temperature
 options["temp_method"] = "eagle"
+
+# Get the working cosmology
+cosmopar = cosmo.get_cosmo()
+
+constants = constants.get()
+
+hztos = constants["hztos"]
+Gcons = constants["Gcons"]
+somtog = constants["somtog"]
+hubpar = cosmo.hubblepar(redshift, cosmopar)
+rhocrit = 3.0*(hubpar*hztos)**2/(8.0*np.pi*Gcons)
 
 # equilibrium - always use thermal equilibrium
 # adiabatic - always use 1/rate = Hubble time
