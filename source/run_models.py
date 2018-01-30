@@ -12,7 +12,7 @@ gastemp = 20000.0
 
 mn_mvir = 8.0
 mx_mvir = 9.65
-nummvir = 11
+nummvir = 21
 
 mn_reds = 0.0
 mx_reds = 0.0
@@ -44,7 +44,7 @@ options["run"]["ncpus"]    = -1
 options["run"]["nummu"]    = 30
 options["run"]["concrit"] = 1.0E-3
 options["run"]["maxiter"] = 500
-options["run"]["outdir"] = "hubb_eqbm_auto" # PUT RUN NAME HERE
+options["run"]["outdir"] = "gradTest" # PUT RUN NAME HERE
 options["geometry"] = "NFW"
 options["geomscale"] = 100
 #options["radfield"] = "PLm1d5_IPm6"
@@ -74,8 +74,7 @@ options["temp_method"] = "eagle"
 
 # get_halo returns the name of the file it writes the output to
 # so that it can be passed back on the next loop iteration to use as an intitial solution
-prev_fname = None
-
+prev_fname = None #'output/eagle_cf3/NFW_mass9d48_redshift0d00_barysclm2d31_HMscalep0d00_1000-30.npy'
 for i in range(nummvir):
     for j in range(numreds):     
         for k in range(numbary):
