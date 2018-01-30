@@ -679,9 +679,11 @@ def thermal_equilibrium_full(double[::1] total_heat not None,
     return np.asarray(prof_temperature)
 
 
+
+
 @cython.wraparound(False)
 @cython.boundscheck(False)
-@cython.cdivision(True) 
+@cython.cdivision(True)
 def thermal_equilibrium_hubble(double[::1] total_heat not None,
                                double[:,::1] total_cool not None,
                                double[:,::1] hubb_rates not None):
@@ -699,7 +701,6 @@ def thermal_equilibrium_hubble(double[::1] total_heat not None,
 
     eflag = 0
     for r in range(0, sz_r):
-        minoff = 1e10
         for c in range(0, sz_c):
             hubb_cool[c] = total_heat[r] - hubb_rates[r,c]
             if (c == sz_c-1) and (dmin == -1):

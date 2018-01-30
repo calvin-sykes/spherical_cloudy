@@ -12,6 +12,7 @@ import elemids
 import recomb
 import cosmo
 import misc
+import eagle_coolfunc
 import cython_fns
 import time
 import signal
@@ -226,6 +227,20 @@ def get_halo(hmodel,redshift,gastemp,bturb,metals=1.0,Hescale=1.0,cosmopar=np.ar
     chrgtran_HIItargs = chrgtranrate["H II"].keys()
     chrgtran_HeItargs = chrgtranrate["He I"].keys()
     chrgtran_HeIItargs = chrgtranrate["He II"].keys()
+
+    if temp_method == 'eagle':
+        print "Loading Eagle cooling function"
+        table_temp, table_dens, table_cf = eagle_coolfunc.load_cf(prim_He)
+        # Rates at a range of temperatures assuming net cooling time is the Hubble time
+        #rates_adiabatic = (1.5 * kB * table_temp[np.newaxis, :]) / (table_dens[:, np.newaxis] * hubb_time)
+        rates_adiabatic = (1.5 * kB * table_temp[np.newaxis, :]) / (0.6 * (1 + 4 * prim_He) * table_dens[:, np.newaxis] * (1 - prim_He)**2 * hubb_time)
+        # Minimise | rates - rates_adiabatic | to find the temperature profile
+        # complication: this function is multi-branched, so using argmin is unreliable
+        # Instead, sort the temperature bins by the residual they give...
+        ord_adiabatic = np.argsort(np.abs(table_cf - rates_adiabatic), axis=1)
+        # ... and find the lowest temperature one to make sure the lower branch is followed
+        temp_adiabatic = np.sort(table_temp[ord_adiabatic[:,0:5]], axis=1)[:,0]
+        
     
     close=False
 
@@ -281,6 +296,10 @@ def get_halo(hmodel,redshift,gastemp,bturb,metals=1.0,Hescale=1.0,cosmopar=np.ar
             densitynH = np.ones(npts) * (10.0**hmodel.mvir)
             prof_coldens = np.zeros((nions,npts))
             prof_density = 1.0E-1*np.ones((nions,npts))
+        else:
+            print "Unknown geometry"
+            assert False
+        
         prof_temperature = gastemp * np.ones(npts)
         prof_phionrate = np.zeros((nions,npts))
         Yprofs = 1.0E-2*np.ones((nions,npts))
@@ -351,7 +370,7 @@ def get_halo(hmodel,redshift,gastemp,bturb,metals=1.0,Hescale=1.0,cosmopar=np.ar
                 dens_scale = barymass / (4.0 * np.pi * protmss * (1.0 + 4.0*prim_He) * rintegral)
             densitynH = dens_scale * temp_densitynH
             densitym  = densitynH * protmss * (1.0 + 4.0*prim_He)
-
+        
         # Update the volume density of the unionized species
         for j in range(nions):
             # density of this specie = unionized fraction * H volume density * number abundance relative to H
@@ -594,110 +613,113 @@ def get_halo(hmodel,redshift,gastemp,bturb,metals=1.0,Hescale=1.0,cosmopar=np.ar
             tmp_Yprofs = Yprofs.copy()
         print "Inner iteration cycled {0:d} times".format(inneriter)
 
-        print "Calculating heating rate"
-        # Construct an array of ionization energies and the corresponding array for the indices
-        ionlvl = np.zeros(nions,dtype=np.float)
-        for j in range(nions):
-            ionlvl[j] = elID[ions[j]].ip*elvolt/planck
-        # Photoionization heating
-        prof_eps  = 4.0*np.pi * cython_fns.phheatrate_allion(jnurarr, phelxs, nuzero, ionlvl, planck)
-        prof_phionheatrate = np.zeros(npts,dtype=np.float)
-        for j in range(nions):
-            prof_phionheatrate += prof_eps[j]*densitynH*elID[ions[j]].abund*Yprofs[j]
-        # Secondary electron photoheating rate (Shull & van Steenberg 1985)
-        heat_HI  = 4.0*np.pi * cython_fns.scdryheatrate(jnurarr,nuzero,phelxs[elID["H I"].id],electrondensity/(densitynH*(1.0+2.0*prim_He)), elID["H I"].ip, elID["D I"].ip, elID["He I"].ip, planck, elvolt, 0)
-        heat_HeI = 4.0*np.pi * cython_fns.scdryheatrate(jnurarr,nuzero,phelxs[elID["He I"].id],electrondensity/(densitynH*(1.0+2.0*prim_He)), elID["H I"].ip, elID["D I"].ip, elID["He I"].ip, planck, elvolt, 2)
-        scdry_heat_rate = heat_HI*densitynH*Yprofs[elID["H I"].id] + heat_HeI*densitynH*prim_He*Yprofs[elID["He I"].id]
+        # If the tabulated Eagle cooling function is used, there's no need to calculate any rates
+        if temp_method != 'eagle':
+            print "Calculating heating rate"
+            # Construct an array of ionization energies and the corresponding array for the indices
+            ionlvl = np.zeros(nions,dtype=np.float)
+            for j in range(nions):
+                ionlvl[j] = elID[ions[j]].ip*elvolt/planck
+                # Photoionization heating
+                prof_eps  = 4.0*np.pi * cython_fns.phheatrate_allion(jnurarr, phelxs, nuzero, ionlvl, planck)
+                prof_phionheatrate = np.zeros(npts,dtype=np.float)
+            for j in range(nions):
+                prof_phionheatrate += prof_eps[j]*densitynH*elID[ions[j]].abund*Yprofs[j]
+            # Secondary electron photoheating rate (Shull & van Steenberg 1985)
+            heat_HI  = 4.0*np.pi * cython_fns.scdryheatrate(jnurarr,nuzero,phelxs[elID["H I"].id],electrondensity/(densitynH*(1.0+2.0*prim_He)), elID["H I"].ip, elID["D I"].ip, elID["He I"].ip, planck, elvolt, 0)
+            heat_HeI = 4.0*np.pi * cython_fns.scdryheatrate(jnurarr,nuzero,phelxs[elID["He I"].id],electrondensity/(densitynH*(1.0+2.0*prim_He)), elID["H I"].ip, elID["D I"].ip, elID["He I"].ip, planck, elvolt, 2)
+            scdry_heat_rate = heat_HI*densitynH*Yprofs[elID["H I"].id] + heat_HeI*densitynH*prim_He*Yprofs[elID["He I"].id]
 
-        # Finally, the total heating rate is:
-        total_heat = prof_phionheatrate + scdry_heat_rate
+            # Finally, the total heating rate is:
+            total_heat = prof_phionheatrate + scdry_heat_rate
 
-        print "Calculating cooling rate"
-        # cooling rate evaluated at range of temperatures [rad_coord, temp_coord] 
-        total_cool = cython_fns.cool_rate(total_heat, electrondensity, densitynH, Yprofs[elID["H I"].id], Yprofs[elID["He I"].id], Yprofs[elID["He II"].id], prim_He, redshift)
+            print "Calculating cooling rate"
+            # cooling rate evaluated at range of temperatures [rad_coord, temp_coord] 
+            total_cool = cython_fns.cool_rate(total_heat, electrondensity, densitynH, Yprofs[elID["H I"].id], Yprofs[elID["He I"].id], Yprofs[elID["He II"].id], prim_He, redshift)
 
         print "Deriving the temperature profile"
         old_temperature = prof_temperature.copy()
-
+        
         if temp_method == 'original':
             prof_temperature = cython_fns.thermal_equilibrium_full(total_heat, total_cool, old_temperature)
         elif temp_method == 'eagle':
-            assert 0 # TODO
-        else:
+            # Use interpolated net (heating-cooling)/n_H**2 rates from Wiersma, Schaye & Smith '09
+            # discretise the density profile to find temperatures
+            which_dens = np.digitize(densitynH, table_dens) # returns right edges of bins
+
+            gradval = (temp_adiabatic[which_dens] - temp_adiabatic[which_dens-1]) / (table_dens[which_dens] - table_dens[which_dens-1])
+            prof_temperature = temp_adiabatic[which_dens] - gradval * (table_dens[which_dens] - densitynH)
+            #prof_temperature = temp_adiabatic[which_dens]
+
+        elif temp_method == 'equilibrium':
+            # Generate a range of temperature values the code is allowed to use
+            temp = np.logspace(3, 6, 1000)
+            # Equilibrium is achieved when absolute value of net rate is minimised
+            loc_eqbm = np.argmin(np.abs(total_heat[:, np.newaxis] - total_cool), axis=1)
+            prof_temperature = temp[loc_eqbm]
+
+        elif temp_method == 'hubble':
             # difference of normalised rates as per Appendix B, Theuns+ 98
-            # NB these rates have an extra factor of n_H^2 compared with defns there
             net_rate = np.abs(total_heat[:, np.newaxis] - total_cool) / densitynH[:, np.newaxis]**2
 
-            # Equilibrium is achieved when absolute value of net rate is minimised
-            loc_eqbm = np.argmin(net_rate, axis=1)
+            # Generate a range of temperature values the code is allowed to use
             temp = np.logspace(3, 6, 1000)
-            temp_eqbm = temp[loc_eqbm]
 
-            if temp_method == 'equilibrium':
-                prof_temperature = temp_eqbm
-            else:
-                # net rates such that the cooling time equals the Hubble time
-                hubb_rates = (3 * kB * protmss * (densitynH**2) / (2 * masspp * densitym*(1-prim_He)**2*hubb_time))[:, np.newaxis] * temp[np.newaxis, :]
+            # net rates such that the cooling time equals the Hubble time
+            hubb_rates = (1.5 * kB * temp[np.newaxis, :] * protmss) / (masspp * densitym*(1-prim_He)**2*hubb_time)[:, np.newaxis]
+            ord_adiabatic = np.argsort(np.abs(net_rate - hubb_rates), axis=1)
+            prof_temperature = np.sort(temp[ord_adiabatic[:,0:5]], axis=1)[:,0]
 
-                # cooling rate needed to produce above rates
-                hubb_cool = total_heat[:, np.newaxis] - hubb_rates 
+        else:
+            print "Undefined temperature method"
+            assert 0
         
-                # Temperatures from assuming net cooling time is equal to Hubble time
-                temp_hubb = cython_fns.thermal_equilibrium_hubble(total_heat, total_cool, hubb_rates)
-
-                if temp_method == 'hubble':
-                    prof_temperature = temp_hubb
-                elif temp_method == 'auto':
-                    # Which regime to use?
-                    # Calculate individual cooling times for thermal eq.
-                    # If less than Hubble time, use the equilibrium temperature
-                    # Else, use Hubble-limited ones
-                    t_cool = ((3 * kB * protmss * temp_eqbm * densitynH**2)
-                              / (2 * masspp * densitym*(1-prim_He)**2*total_cool[range(total_cool.shape[0]),loc_eqbm]))
-                    prof_temperature = np.where(t_cool < hubb_time, temp_eqbm, temp_hubb)
-
-                    print "Equilibrium:", np.sum(t_cool < hubb_time), "Hubble:", np.sum(np.logical_not(t_cool < hubb_time))
-                else:
-                    print "Undefined temperature method"
-                    assert 0
-        
-        if False: #(iteration==1):
+        if False: #iteration==1:
             fig_dens = plt.figure()
-            fig_ypr = plt.figure()
+            #fig_ypr = plt.figure()
             fig_nhT = plt.figure()
-            fig_T = plt.figure()
+            #fig_T = plt.figure()
             plt.ion()
 
-        if False: #(iteration % 10 == 0 or iteration > 100):
+        if False: #(iteration % 1 == 0 or iteration > 100):
             fig_dens.clear()
-            fig_ypr.clear()
+            #fig_ypr.clear()
             fig_nhT.clear()
-            fig_T.clear()
+            #fig_T.clear()
 
             ax_dens = fig_dens.gca()
-            ax_dens.plot(np.log10(radius*cmtopc), np.log10(densitynH))
+            ax_dens.set_xscale('log')
+            ax_dens.set_yscale('log')
+            #cnt = ax_dens.contourf(densitynH, temp, np.abs(net_rate - hubb_rates).T, norm=mcolors.LogNorm())
+            #fig_dens.colorbar(cnt)
+            ax_dens.plot(densitynH, prof_temperature)
+            #ax_dens.plot(densitynH, temp[np.argmin(net_rate, axis=1)])
+            #ax_dens.plot(np.log10(radius*cmtopc), np.log10(densitynH))
             fig_dens.canvas.draw_idle()
             fig_dens.show()
 
-            ax_ypr = fig_ypr.gca()
-            ax_ypr.plot(np.log10(radius*cmtopc), np.log10(Yprofs[elID["H I"].id]), label="HI")
-            ax_ypr.plot(np.log10(radius*cmtopc), np.log10(Yprofs[elID["D I"].id]), label="DI")
-            ax_ypr.plot(np.log10(radius*cmtopc), np.log10(Yprofs[elID["He I"].id]), label="HeI")
-            ax_ypr.plot(np.log10(radius*cmtopc), np.log10(Yprofs[elID["He II"].id]), label="HeII")
-            ax_ypr.legend()
-            fig_ypr.canvas.draw_idle()
-            fig_ypr.show()
+            #ax_ypr = fig_ypr.gca()
+            #ax_ypr.plot(np.log10(radius*cmtopc), np.log10(Yprofs[elID["H I"].id]), label="HI")
+            #ax_ypr.plot(np.log10(radius*cmtopc), np.log10(Yprofs[elID["D I"].id]), label="DI")
+            #ax_ypr.plot(np.log10(radius*cmtopc), np.log10(Yprofs[elID["He I"].id]), label="HeI")
+            #ax_ypr.plot(np.log10(radius*cmtopc), np.log10(Yprofs[elID["He II"].id]), label="HeII")
+            #ax_ypr.legend()
+            #fig_ypr.canvas.draw_idle()
+            #fig_ypr.show()
 
             ax_nhT = fig_nhT.gca()
-            ax_nhT.plot(np.log10(densitynH), np.log10(prof_temperature))
-            ax_nhT.plot(np.log10(densitynH), np.log10(1E4 * (densitynH / 10**-6)**0.54))
+            ax_nhT.plot(np.log10(densitynH), np.log10(prof_temperature), label='nH-T')
+            #ax_nhT.plot(np.log10(table_dens), np.log10(table_temp[np.argmin(table_cf, axis=1)]), '--', label='eqbm')
+            ax_nhT.plot(np.log10(densitynH), np.log10(1E4 * (densitynH / 10**-6)**0.54), label='appx')
+            #ax_nhT.plot(np.log10(table_dens), np.log10(temp_adiabatic), '--', label='cf')
+            ax_nhT.legend()
             fig_nhT.canvas.draw_idle()
             fig_nhT.show()
 
-            ax_T = fig_T.gca()
-            ax_T.plot(np.log10(radius*cmtopc), np.log10(prof_temperature))
-            fig_T.canvas.draw_idle()
-            fig_T.show()
+            #ax_T = fig_T.gca()
+            #ax_T.plot(np.log10(radius*cmtopc), np.log10(prof_temperature))
+            #fig_T.canvas.draw_idle()
+            #fig_T.show()
 
             plt.pause(0.01)
 
