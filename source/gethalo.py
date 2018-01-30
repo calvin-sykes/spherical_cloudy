@@ -3,7 +3,8 @@ from matplotlib import pyplot as plt
 import matplotlib.colors as mcolors
 import matplotlib.cm as cm
 import charge_transfer as chrgtran
-import getoptions
+import options
+import constants
 import phionxsec
 import radfields
 import photoion
@@ -122,14 +123,17 @@ def get_halo(hmodel,redshift,gastemp,bturb,metals=1.0,Hescale=1.0,cosmopar=np.ar
     nummu   = options["run"]["nummu"]
     concrit = options["run"]["concrit"]
     ncpus   = options["run"]["ncpus"]
-    kB      = options["const"]["kB"]
-    cmtopc  = options["const"]["cmtopc"]
-    somtog  = options["const"]["somtog"]
-    Gcons   = options["const"]["Gcons"]
-    planck  = options["const"]["planck"]
-    elvolt  = options["const"]["elvolt"]
-    protmss = options["const"]["protmss"]
-    hztos   = options["const"]["hztos"]
+
+    const = constants.get()
+    
+    kB      = const["kB"]
+    cmtopc  = const["cmtopc"]
+    somtog  = const["somtog"]
+    Gcons   = const["Gcons"]
+    planck  = const["planck"]
+    elvolt  = const["elvolt"]
+    protmss = const["protmss"]
+    hztos   = const["hztos"]
 
     # Maximum allowed column density
     MAX_COL_DENS = 22.0
@@ -181,10 +185,10 @@ def get_halo(hmodel,redshift,gastemp,bturb,metals=1.0,Hescale=1.0,cosmopar=np.ar
     print "Loading radiation fields"
     if options["radfield"] == "HM12":
         # Get the Haardt & Madau (2012) background at the appropriate redshift
-        jzero, nuzero = radfields.HMbackground(elID,redshift=redshift,options=options)
+        jzero, nuzero = radfields.HMbackground(elID,redshift=redshift)
         jzero *= options["HMscale"]
     elif options["radfield"][0:2] == "PL":
-        jzero, nuzero = radfields.powerlaw(elID,options=options)
+        jzero, nuzero = radfields.powerlaw(elID)
     else:
         print "The radiation field {0:s} is not implemented yet".format(options["radfield"])
         sys.exit()

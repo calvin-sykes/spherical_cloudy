@@ -1,6 +1,7 @@
 import numpy as np
 import cython_fns
 from matplotlib import pyplot as plt
+import constants
 
 def HMbackground_z0_sternberg(nu=None,maxvu=200.0,num=10000):
     Jnu0 = 2.0E-23
@@ -21,10 +22,10 @@ def HMbackground_z0_sternberg(nu=None,maxvu=200.0,num=10000):
     J[w] *= 1.051E2 * nu[w]**-1.5
     return J, nu*nu0
 
-def HMbackground(elID,redshift=3.0,options=None):
-    if options is None: options = getoptions.default()
-    planck  = options["const"]["planck"]
-    elvolt  = options["const"]["elvolt"]
+def HMbackground(elID,redshift=3.0):
+    const = constants.get()
+    planck  = const["planck"]
+    elvolt  = const["elvolt"]
     usecols=()
     for i in range(60): usecols += (i,)
     data = np.loadtxt("HM12_UVB.dat", usecols=usecols)
@@ -97,10 +98,10 @@ def HMbackground(elID,redshift=3.0,options=None):
     #plt.show()
     return Jnut[argsrt], nut[argsrt]
 
-def powerlaw(elID,options=None):
-    if options is None: options = getoptions.default()
-    planck  = options["const"]["planck"]
-    elvolt  = options["const"]["elvolt"]
+def powerlaw(elID,):
+    const = constants.get()
+    planck  = const["planck"]
+    elvolt  = const["elvolt"]
     try:
         nurevt, Jnurevt = np.loadtxt(options["radfield"]+".radfield",unpack=True)
         # Now load the HM spectrum to get the same frequency scale
@@ -167,10 +168,10 @@ def powerlaw(elID,options=None):
     #plt.show()
     return Jnut[argsrt], nut[argsrt]
 
-def test_background(elID,options=None):
-    if options is None: options = getoptions.default()
-    planck  = options["const"]["planck"]
-    elvolt  = options["const"]["elvolt"]
+def test_background(elID):
+    const = constants.get()
+    planck  = const["planck"]
+    elvolt  = const["elvolt"]
     nurev, Jnurev = np.loadtxt("test_continuum3.dat",unpack=True)
     #Jnurev /= (2.0)
     print "Using test background radiation field (table power law -1)"
