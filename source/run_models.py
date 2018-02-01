@@ -4,6 +4,7 @@ import gethalo
 import options
 import constants
 import cosmo
+import os
 
 bturb = 3.0
 metals = 1.0E-3
@@ -27,7 +28,7 @@ mn_HMscl = 1.0
 mx_HMscl = 1.0
 numHMscl = 1
 
-virialm = np.concatenate([np.arange(8.0, 9.25, 0.05), np.arange(9.25, 9.4, 0.025), np.arange(9.4, 9.6, 0.01)])
+virialm = np.concatenate([np.arange(8.0, 9.0, 0.1), np.arange(9.0, 9.5, 0.05), np.arange(9.5, 9.7, 0.01)])
 nummvir = len(virialm)
 
 redshift = np.linspace(mn_reds,mx_reds,numreds)
@@ -39,6 +40,9 @@ halomass, barymass = np.loadtxt("data/baryfrac.dat", unpack=True)
 baryfracvals = 10.0**barymass / 10.0**halomass
 baryfrac = np.interp(virialm, halomass, baryfracvals)
 
+# Whether to resume from the most recently written output file
+resume = True #False
+
 # Set the options dictionary
 options = options.default()
 # Overwrite the defaults
@@ -47,7 +51,7 @@ options["run"]["ncpus"]    = -1
 options["run"]["nummu"]    = 30
 options["run"]["concrit"] = 1.0E-3
 options["run"]["maxiter"] = 500
-options["run"]["outdir"] = "test" # PUT RUN NAME HERE
+options["run"]["outdir"] = "fine_mass_step" # PUT RUN NAME HERE
 options["geometry"] = "NFW"
 options["geomscale"] = 100
 #options["radfield"] = "PLm1d5_IPm6"
@@ -63,8 +67,8 @@ options["temp_method"] = "eagle"
 # Get the working cosmology
 cosmopar = cosmo.get_cosmo()
 
+# Get some constants needed to define the halo model
 constants = constants.get()
-
 hztos = constants["hztos"]
 Gcons = constants["Gcons"]
 somtog = constants["somtog"]
@@ -76,30 +80,50 @@ rhocrit = 3.0*(hubpar*hztos)**2/(8.0*np.pi*Gcons)
 # eagle - use cooling rate table from Eagle
 # original - use Ryan's original thermal equilibrium function
 
-# get_halo returns the name of the file it writes the output to
-# so that it can be passed back on the next loop iteration to use as an intitial solution
-for j in range(numreds):     
-    for k in range(numbary):
-        for l in range(numHMscl):
-            prev_fname = None
-            for i in range(nummvir):
+# Find the most recent output file
+# and carry on from there
+if resume:
+    wd = os.getcwd()
+    out_path = 'output/' + options["run"]["outdir"] + '/'
+    os.chdir(out_path)
+    files = sorted(os.listdir('.'), key=os.path.getmtime)
+    # return to working directory
+    os.chdir(wd)
+    nfiles = len(files)
+    prev_fname = out_path + files[-1]
+    smvir = nfiles % nummvir
+    sHMscl = (nfiles // nummvir) % numHMscl
+    sbary = (nfiles // (nummvir * numHMscl)) % numbary
+    sreds = (nfiles // (nummvir * numHMscl * numbary))
+else:
+    sreds = 0
+    sbary = 0
+    sHMscl = 0
+    smvir = 0
+    prev_fname = None
+
+for i in range(sreds, numreds):     
+    for j in range(sbary, numbary):
+        for k in range(sHMscl, numHMscl):
+            for l in range(smvir, nummvir):
                 print "#########################"
                 print "#########################"
-                print "  virialm  {0:d}/{1:d}".format(i+1,nummvir)
-                print "  redshift {0:d}/{1:d}".format(j+1,numreds)
-                print "  baryon scale {0:d}/{1:d}".format(k+1,numbary)
-                print "  UVB scale {0:d}/{1:d}".format(l+1,numHMscl)
+                print "  virialm  {0:d}/{1:d}".format(l+1,nummvir)
+                print "  redshift {0:d}/{1:d}".format(k+1,numreds)
+                print "  baryon scale {0:d}/{1:d}".format(j+1,numbary)
+                print "  UVB scale {0:d}/{1:d}".format(i+1,numHMscl)
                 print "#########################"
                 print "#########################"
-                concentration = cosmo.massconc_Prada12(10**virialm[i], cosmopar, redshift[j])
-                model = halomodel.NFWHalo(10**virialm[i] * somtog, baryfrac[i] * baryscale[k], rhocrit, concentration)
+                concentration = cosmo.massconc_Prada12(10**virialm[l], cosmopar, redshift[k])
+                model = halomodel.NFWHalo(10**virialm[l] * somtog, baryfrac[l] * baryscale[j], rhocrit, concentration)
                 # Let's go!
-                ok, res = gethalo.get_halo(model,redshift[j],gastemp,bturb,Hescale=1.0,metals=metals,cosmopar=cosmopar,ions=ions,prevfile=prev_fname,options=options)
+                ok, res = gethalo.get_halo(model,redshift[k],gastemp,bturb,Hescale=1.0,metals=metals,cosmopar=cosmopar,ions=ions,prevfile=prev_fname,options=options)
                 
                 if ok:
                     prev_fname = res
                 else:
                     # something went wrong with the model
-                    print "Error: {:s}".format(res)
+                    print "ERROR :: {:s}".format(res)
                     # Don't terminate entirely; just move on to the next bit of the grid
                     break
+            prev_fname = None
