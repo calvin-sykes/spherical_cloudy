@@ -28,7 +28,7 @@ mn_HMscl = 1.0
 mx_HMscl = 1.0
 numHMscl = 1
 
-virialm = np.concatenate([np.arange(8.0, 9.0, 0.1), np.arange(9.0, 9.5, 0.05), np.arange(9.5, 9.7, 0.01)])
+virialm = np.concatenate([np.arange(8.0, 9.0, 0.1), np.arange(9.0, 9.5, 0.05), np.arange(9.5, 9.65, 0.01)])
 nummvir = len(virialm)
 
 redshift = np.linspace(mn_reds,mx_reds,numreds)
@@ -42,16 +42,17 @@ baryfrac = np.interp(virialm, halomass, baryfracvals)
 
 # Whether to resume from the most recently written output file
 resume = True #False
+where = 1 # index back from the most recent file
 
 # Set the options dictionary
 options = options.default()
 # Overwrite the defaults
-options["run"]["nsample"]  = 1000
-options["run"]["ncpus"]    = -1
-options["run"]["nummu"]    = 30
+options["run"]["nsample"] = 1000
+options["run"]["ncpus"]   = -1
+options["run"]["nummu"]   = 30
 options["run"]["concrit"] = 1.0E-3
 options["run"]["maxiter"] = 500
-options["run"]["outdir"] = "fine_mass_step" # PUT RUN NAME HERE
+options["run"]["outdir"]  = "fine_mass_step" # PUT RUN NAME HERE
 options["geometry"] = "NFW"
 options["geomscale"] = 100
 #options["radfield"] = "PLm1d5_IPm6"
@@ -62,6 +63,10 @@ options["HMscale"] = 1.0
 options["force_P"] = True
 
 # Method used to derive temperature
+# equilibrium - always use thermal equilibrium
+# adiabatic - always use 1/rate = Hubble time
+# eagle - use cooling rate table from Eagle
+# original - use Ryan's original thermal equilibrium function
 options["temp_method"] = "eagle"
 
 # Get the working cosmology
@@ -75,26 +80,26 @@ somtog = constants["somtog"]
 hubpar = cosmo.hubblepar(redshift, cosmopar)
 rhocrit = 3.0*(hubpar*hztos)**2/(8.0*np.pi*Gcons)
 
-# equilibrium - always use thermal equilibrium
-# adiabatic - always use 1/rate = Hubble time
-# eagle - use cooling rate table from Eagle
-# original - use Ryan's original thermal equilibrium function
-
-# Find the most recent output file
-# and carry on from there
-if resume:
+# Find the name of a previously written file, and initialise loop counters
+# such that the run starts from this file
+# params: 'where' is an index back from the last file written (0=last)
+def init_resume(where):
     wd = os.getcwd()
     out_path = 'output/' + options["run"]["outdir"] + '/'
     os.chdir(out_path)
     files = sorted(os.listdir('.'), key=os.path.getmtime)
     # return to working directory
     os.chdir(wd)
-    nfiles = len(files)
-    prev_fname = out_path + files[-1]
-    smvir = nfiles % nummvir
-    sHMscl = (nfiles // nummvir) % numHMscl
-    sbary = (nfiles // (nummvir * numHMscl)) % numbary
-    sreds = (nfiles // (nummvir * numHMscl * numbary))
+    file_idx = len(files) - where
+    fname = out_path + files[file_idx - 1]
+    smvir = file_idx % nummvir
+    sHMscl = (file_idx // nummvir) % numHMscl
+    sbary = (file_idx // (nummvir * numHMscl)) % numbary
+    sreds = (file_idx // (nummvir * numHMscl * numbary))
+    return (fname, smvir, sHMscl, sbary, sreds)
+
+if resume:
+    prev_fname, smvir, sHMscl, sbary, sreds = init_resume(where)
 else:
     sreds = 0
     sbary = 0

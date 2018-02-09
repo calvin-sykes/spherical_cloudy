@@ -679,8 +679,6 @@ def thermal_equilibrium_full(double[::1] total_heat not None,
     return np.asarray(prof_temperature)
 
 
-
-
 @cython.wraparound(False)
 @cython.boundscheck(False)
 @cython.cdivision(True)
@@ -729,6 +727,61 @@ def thermal_equilibrium_hubble(double[::1] total_heat not None,
                 prof_temperature[r] = temp[dmin] - (hubb_cool[dmin] - total_cool[r, dmin]) / gradval
     if eflag == 1: print "ERROR :: HEATING RATE WAS LOWER/HIGHER THAN THE COOLING RATE FUNCTION!"
     return np.asarray(prof_temperature)
+
+
+@cython.wraparound(False)
+@cython.boundscheck(False)
+@cython.cdivision(True)
+def thermal_equilibrium_eagle(double[::1] densitynH not None,
+                              double[:,::1] adiabatic_rates not None,
+                              double[:,::1] interpolated_rates not None):
+    cdef int sz_r, sz_t
+    cdef int r, t
+    cdef double dens_val, diff
+    cdef int eflag, dmin
+    
+    sz_r = densitynH.shape[0]
+    sz_t = 1000
+
+    cdef double[::1] prof_temperature = np.zeros((sz_r), dtype=DTYPE)
+
+    # Generate a range of temperatures that the code is allowed to use:
+    cdef double[::1] temp = np.logspace(3.0,6.0,sz_t)
+
+    eflag = 0
+    pdiff = 0
+    for r in range(sz_r):
+        for t in range(sz_t):
+            if (t == sz_t-1) and (dmin == -1):
+                eflag = 1
+                dmin = 0
+                break
+            if t == 0:
+                dmin = -1
+            else:
+                # looking for point when diff of rates changes sign
+                # point of equality lies between
+                # dmin is the lower bound on the equality point
+                if ((adiabatic_rates[r,t] - interpolated_rates[r,t]) * pdiff) < 0.0:
+                    dmin = t - 1
+                    break
+                    #print(r, dmin)
+            pdiff = adiabatic_rates[r,t] - interpolated_rates[r,t] # 'previous' value of difference
+        prof_temperature[r] = temp[dmin]
+        #if dmin == 0:
+        #    prof_temperature[r] = temp[dmin]
+        #elif dmin == sz_t - 1:
+        #    prof_temperature[r] = temp[dmin]
+        #else:
+        #    # gradient dcool/dT
+        #    gradval = ((hubb_cool[dmin+1] - total_cool[r, dmin+1]) - (hubb_cool[dmin] - total_cool[r, dmin])) / (temp[dmin+1] - temp[dmin])
+        #    if gradval == 0.0:
+        #        prof_temperature[r] = 0.5 * (temp[dmin+1] - temp[dmin])
+        #    else:
+        #        prof_temperature[r] = temp[dmin] - (hubb_cool[dmin] - total_cool[r, dmin]) / gradval
+    if eflag == 1: print "ERROR :: HEATING RATE WAS LOWER/HIGHER THAN THE COOLING RATE FUNCTION!"
+    return np.asarray(prof_temperature)
+
 
 @cython.wraparound(False)
 @cython.boundscheck(False)

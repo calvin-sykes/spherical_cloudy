@@ -136,7 +136,7 @@ def get_halo(hmodel,redshift,gastemp,bturb,metals=1.0,Hescale=1.0,cosmopar=np.ar
     hztos   = const["hztos"]
 
     # Maximum allowed column density
-    MAX_COL_DENS = 22.0
+    MAX_COL_DENS = 23.0 #22.0
 
     geom = options["geometry"]
     geomscale = options["geomscale"]
@@ -247,7 +247,6 @@ def get_halo(hmodel,redshift,gastemp,bturb,metals=1.0,Hescale=1.0,cosmopar=np.ar
         ord_adiabatic = np.argsort(np.abs(table_cf - rates_adiabatic), axis=1)
         # ... and find the lowest temperature one to make sure the lower branch is followed
         temp_adiabatic = np.sort(table_temp[ord_adiabatic[:,0:5]], axis=1)[:,0]
-        
     
     close=False
 
@@ -655,9 +654,12 @@ def get_halo(hmodel,redshift,gastemp,bturb,metals=1.0,Hescale=1.0,cosmopar=np.ar
             # discretise the density profile to find temperatures
             which_dens = np.digitize(densitynH, table_dens) # returns right edges of bins
 
+            # hack: force density to maximum value that is tabulated
+            ovr_dens = (which_dens == len(table_dens))
+            which_dens[ovr_dens] = len(table_dens) - 1
+
             gradval = (temp_adiabatic[which_dens] - temp_adiabatic[which_dens-1]) / (table_dens[which_dens] - table_dens[which_dens-1])
             prof_temperature = temp_adiabatic[which_dens] - gradval * (table_dens[which_dens] - densitynH)
-            #prof_temperature = temp_adiabatic[which_dens]
 
         elif temp_method == 'equilibrium':
             # Generate a range of temperature values the code is allowed to use
@@ -682,52 +684,24 @@ def get_halo(hmodel,redshift,gastemp,bturb,metals=1.0,Hescale=1.0,cosmopar=np.ar
             print "Undefined temperature method"
             assert 0
         
-        if False: #iteration==1:
-            fig_dens = plt.figure()
-            #fig_ypr = plt.figure()
-            fig_nhT = plt.figure()
-            #fig_T = plt.figure()
+        if iteration==1:
+            live_fig = plt.figure()
             plt.ion()
 
-        if False: #(iteration % 1 == 0 or iteration > 100):
-            fig_dens.clear()
-            #fig_ypr.clear()
-            fig_nhT.clear()
-            #fig_T.clear()
+        if (iteration % 1 == 0 or iteration > 100):
+            live_fig.clear()
 
-            ax_dens = fig_dens.gca()
-            ax_dens.set_xscale('log')
-            ax_dens.set_yscale('log')
-            #cnt = ax_dens.contourf(densitynH, temp, np.abs(net_rate - hubb_rates).T, norm=mcolors.LogNorm())
-            #fig_dens.colorbar(cnt)
-            ax_dens.plot(densitynH, prof_temperature)
-            #ax_dens.plot(densitynH, temp[np.argmin(net_rate, axis=1)])
-            #ax_dens.plot(np.log10(radius*cmtopc), np.log10(densitynH))
-            fig_dens.canvas.draw_idle()
-            fig_dens.show()
-
-            #ax_ypr = fig_ypr.gca()
-            #ax_ypr.plot(np.log10(radius*cmtopc), np.log10(Yprofs[elID["H I"].id]), label="HI")
-            #ax_ypr.plot(np.log10(radius*cmtopc), np.log10(Yprofs[elID["D I"].id]), label="DI")
-            #ax_ypr.plot(np.log10(radius*cmtopc), np.log10(Yprofs[elID["He I"].id]), label="HeI")
-            #ax_ypr.plot(np.log10(radius*cmtopc), np.log10(Yprofs[elID["He II"].id]), label="HeII")
-            #ax_ypr.legend()
-            #fig_ypr.canvas.draw_idle()
-            #fig_ypr.show()
-
-            ax_nhT = fig_nhT.gca()
-            ax_nhT.plot(np.log10(densitynH), np.log10(prof_temperature), label='nH-T')
-            #ax_nhT.plot(np.log10(table_dens), np.log10(table_temp[np.argmin(table_cf, axis=1)]), '--', label='eqbm')
-            ax_nhT.plot(np.log10(densitynH), np.log10(1E4 * (densitynH / 10**-6)**0.54), label='appx')
-            #ax_nhT.plot(np.log10(table_dens), np.log10(temp_adiabatic), '--', label='cf')
-            ax_nhT.legend()
-            fig_nhT.canvas.draw_idle()
-            fig_nhT.show()
-
-            #ax_T = fig_T.gca()
-            #ax_T.plot(np.log10(radius*cmtopc), np.log10(prof_temperature))
-            #fig_T.canvas.draw_idle()
-            #fig_T.show()
+            live_ax = live_fig.gca()
+            #live_ax.set_xlabel('log(Radius (pc))')
+            #live_ax.set_ylabel(r'log($n_H$)')
+            #[live_ax.plot(np.log10(radius * cmtopc), Yprofs[i], label=ions[i]) for i in range(4)]
+            #live_ax.plot(np.log10(radius * cmtopc), prof_temperature)
+            live_ax.plot(np.log10(densitynH), np.log10(prof_temperature))
+            live_ax.annotate('iteration {}'.format(iteration), xy=(0.8,0.8), xycoords='axes fraction')
+            live_ax.legend()
+            # plot commands...
+            live_fig.canvas.draw_idle()
+            live_fig.show()
 
             plt.pause(0.01)
 
@@ -747,8 +721,6 @@ def get_halo(hmodel,redshift,gastemp,bturb,metals=1.0,Hescale=1.0,cosmopar=np.ar
             tmptemp[np.where(np.abs(tmptemp)>lim)] = lim
             tmptemp = np.abs(tmptemp)*tmpsign
             prof_temperature = old_temperature-tmptemp
-
-        
 
         if iteration >= 100 and iteration%1 == 0:
             print "Averaging the stored Yprofs"

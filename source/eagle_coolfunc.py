@@ -16,9 +16,9 @@ def load_cf(prim_He):
 
     # find helium mass fraction bin closest to that chosen
     bestY = np.argmin(np.abs(prim_He - Ybins.value))
-    coolY = cool[bestY]
+    coolY = cool[bestY].T
 
-    interp = scipy.interpolate.interp2d(Tbins, nbins, coolY.T, kind='linear')
+    interp = scipy.interpolate.interp2d(Tbins, nbins, np.abs(coolY), kind='cubic', bounds_error=True)
 
     densvals = np.logspace(-7, 0, 1000)
     tempvals = np.logspace(3, 6, 1000)
