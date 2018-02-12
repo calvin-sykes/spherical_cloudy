@@ -237,16 +237,17 @@ def get_halo(hmodel,redshift,gastemp,bturb,metals=1.0,Hescale=1.0,cosmopar=np.ar
 
     if temp_method == 'eagle':
         print "Loading Eagle cooling function"
-        table_temp, table_dens, table_cf = eagle_coolfunc.load_cf(prim_He)
+        #table_temp, table_dens, table_cf = eagle_coolfunc.load_cf(prim_He)
         # Rates at a range of temperatures assuming net cooling time is the Hubble time
         #rates_adiabatic = (1.5 * kB * table_temp[np.newaxis, :]) / (table_dens[:, np.newaxis] * hubb_time)
-        rates_adiabatic = (1.5 * kB * table_temp[np.newaxis, :]) / (0.6 * (1 + 4 * prim_He) * table_dens[:, np.newaxis] * (1 - prim_He)**2 * hubb_time)
+        #rates_adiabatic = (1.5 * kB * table_temp[np.newaxis, :]) / (0.6 * (1 + 4 * prim_He) * table_dens[:, np.newaxis] * (1 - prim_He)**2 * hubb_time)
         # Minimise | rates - rates_adiabatic | to find the temperature profile
         # complication: this function is multi-branched, so using argmin is unreliable
         # Instead, sort the temperature bins by the residual they give...
-        ord_adiabatic = np.argsort(np.abs(table_cf - rates_adiabatic), axis=1)
+        #ord_adiabatic = np.argsort(np.abs(table_cf - rates_adiabatic), axis=1)
         # ... and find the lowest temperature one to make sure the lower branch is followed
-        temp_adiabatic = np.sort(table_temp[ord_adiabatic[:,0:5]], axis=1)[:,0]
+        #temp_adiabatic = np.sort(table_temp[ord_adiabatic[:,0:5]], axis=1)[:,0]
+        cf_interp = eagle_coolfunc.load_cf(prim_He)
     
     close=False
 
@@ -652,14 +653,40 @@ def get_halo(hmodel,redshift,gastemp,bturb,metals=1.0,Hescale=1.0,cosmopar=np.ar
         elif temp_method == 'eagle':
             # Use interpolated net (heating-cooling)/n_H**2 rates from Wiersma, Schaye & Smith '09
             # discretise the density profile to find temperatures
-            which_dens = np.digitize(densitynH, table_dens) # returns right edges of bins
+            #which_dens = np.digitize(densitynH, table_dens) # returns right edges of bins
 
             # hack: force density to maximum value that is tabulated
-            ovr_dens = (which_dens == len(table_dens))
-            which_dens[ovr_dens] = len(table_dens) - 1
+            #ovr_dens = (which_dens == len(table_dens))
+            #which_dens[ovr_dens] = len(table_dens) - 1
 
-            gradval = (temp_adiabatic[which_dens] - temp_adiabatic[which_dens-1]) / (table_dens[which_dens] - table_dens[which_dens-1])
-            prof_temperature = temp_adiabatic[which_dens] - gradval * (table_dens[which_dens] - densitynH)
+            #gradval = (temp_adiabatic[which_dens] - temp_adiabatic[which_dens-1]) / (table_dens[which_dens] - table_dens[which_dens-1])
+            #prof_temperature = temp_adiabatic[which_dens] - gradval * (table_dens[which_dens] - densitynH)
+
+            # hack: force density to maximum value that is tabulated
+            # for purpose of finding temperature
+            clamped_dens = np.where(densitynH >= 1.0, 1.0, densitynH)
+            clamped_mass = clamped_dens * protmss * (1.0 + 4.0*prim_He)
+
+            # Generate a range of temperature values the code is allowed to use
+            temp = np.logspace(3, 4.6, 1000)
+            
+            # Interpolate the cooling function to find cooling rates at each density as a fn of temperature
+            # interp2d returns values in _sorted_ order of the inputs, which is bad
+            # the following trick allows the correct order to be reconstructed
+            order = np.argsort(clamped_mass)
+            recovery_order = np.argsort(order)
+            rates = np.abs(cf_interp(clamped_dens[order], temp, assume_sorted=True))[:,recovery_order]
+
+            grddens, grdtemp = np.meshgrid(clamped_dens, temp)
+            grdmdens = grddens * protmss * (1 + 4 * prim_He)
+            rates_adiabatic = (1.5 * kB * grdtemp * protmss) / (masspp * grdmdens * (1 - prim_He)**2 * hubb_time)
+
+            # The temperature solution is found by minimising | rates - rates_adiabatic |
+            # This can fail, because the function has two branches for log n_H < -4
+            # We always want the lower branch, so the solution is found by locating the first change in sign
+            # of d(| rates - rates_adiabatic |)/dT
+            loc_adiabatic = np.argmax(np.gradient(np.abs(rates - rates_adiabatic), axis=0) >= 0, axis=0)
+            prof_temperature = temp[loc_adiabatic]
 
         elif temp_method == 'equilibrium':
             # Generate a range of temperature values the code is allowed to use
@@ -684,11 +711,11 @@ def get_halo(hmodel,redshift,gastemp,bturb,metals=1.0,Hescale=1.0,cosmopar=np.ar
             print "Undefined temperature method"
             assert 0
         
-        if iteration==1:
+        if False: #iteration==1:
             live_fig = plt.figure()
             plt.ion()
 
-        if (iteration % 1 == 0 or iteration > 100):
+        if False: #(iteration % 1 == 0 or iteration > 100):
             live_fig.clear()
 
             live_ax = live_fig.gca()
@@ -696,7 +723,7 @@ def get_halo(hmodel,redshift,gastemp,bturb,metals=1.0,Hescale=1.0,cosmopar=np.ar
             #live_ax.set_ylabel(r'log($n_H$)')
             #[live_ax.plot(np.log10(radius * cmtopc), Yprofs[i], label=ions[i]) for i in range(4)]
             #live_ax.plot(np.log10(radius * cmtopc), prof_temperature)
-            live_ax.plot(np.log10(densitynH), np.log10(prof_temperature))
+            live_ax.plot(np.log10(radius * cmtopc), np.log10(prof_temperature))
             live_ax.annotate('iteration {}'.format(iteration), xy=(0.8,0.8), xycoords='axes fraction')
             live_ax.legend()
             # plot commands...
