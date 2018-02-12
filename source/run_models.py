@@ -40,9 +40,11 @@ halomass, barymass = np.loadtxt("data/baryfrac.dat", unpack=True)
 baryfracvals = 10.0**barymass / 10.0**halomass
 baryfrac = np.interp(virialm, halomass, baryfracvals)
 
-# Whether to resume from the most recently written output file
-resume = True #False
-where = 1 # index back from the most recent file
+# Whether to resume from a previously written output file
+# None: don't resume
+# "last": pick up from the most recent file
+# number: pick up from this index in all the models (negative to go from the end backward)
+resume = None
 
 # Set the options dictionary
 options = options.default()
@@ -52,7 +54,7 @@ options["run"]["ncpus"]   = -1
 options["run"]["nummu"]   = 30
 options["run"]["concrit"] = 1.0E-3
 options["run"]["maxiter"] = 500
-options["run"]["outdir"]  = "fine_mass_step" # PUT RUN NAME HERE
+options["run"]["outdir"]  = "test_new_eagle_temps" # PUT RUN NAME HERE
 options["geometry"] = "NFW"
 options["geomscale"] = 100
 #options["radfield"] = "PLm1d5_IPm6"
@@ -81,8 +83,8 @@ hubpar = cosmo.hubblepar(redshift, cosmopar)
 rhocrit = 3.0*(hubpar*hztos)**2/(8.0*np.pi*Gcons)
 
 # Find the name of a previously written file, and initialise loop counters
-# such that the run starts from this file
-# params: 'where' is an index back from the last file written (0=last)
+# such that the run starts from reading back this file
+# params: 'where' is an index back from the last file written (-2=last but one)
 def init_resume(where):
     wd = os.getcwd()
     out_path = 'output/' + options["run"]["outdir"] + '/'
@@ -90,16 +92,24 @@ def init_resume(where):
     files = sorted(os.listdir('.'), key=os.path.getmtime)
     # return to working directory
     os.chdir(wd)
-    file_idx = len(files) - where
+    if where == 'last':
+        file_idx = len(files) - 1
+    elif type(where) is int:
+        file_idx = where
+    else:
+        print("Couldn't understand resume command!")
+        exit(1)
+    print(file_idx)
     fname = out_path + files[file_idx - 1]
     smvir = file_idx % nummvir
     sHMscl = (file_idx // nummvir) % numHMscl
     sbary = (file_idx // (nummvir * numHMscl)) % numbary
     sreds = (file_idx // (nummvir * numHMscl * numbary))
+    print(fname, smvir, sHMscl, sbary, sreds)
     return (fname, smvir, sHMscl, sbary, sreds)
 
-if resume:
-    prev_fname, smvir, sHMscl, sbary, sreds = init_resume(where)
+if resume is not None:
+    prev_fname, smvir, sHMscl, sbary, sreds = init_resume(resume)
 else:
     sreds = 0
     sbary = 0
