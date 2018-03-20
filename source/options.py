@@ -4,11 +4,12 @@ import configparser
 import logger
 
 # What types each setting should be
-option_types = collections.defaultdict(lambda: int) # default to floating-point type
+option_types = collections.defaultdict(lambda: int) # default to integer type
 for str_opt in ['geometry:profile', 'UVB:spectrum', 'phys:temp_method', 'run:outdir', 'run:resume', 'log:level', 'log:file',
                 'grid:virialm', 'grid:redshift', 'grid:baryscale', 'grid:radscale']:
     option_types[str_opt] = str
-for flt_opt in ['geometry:scale', 'geometry:acore', 'UVB:scale', 'run:concrit']:
+for flt_opt in ['geometry:scale', 'geometry:acore', 'UVB:scale', 'run:concrit', 'phys:gastemp', 'phys:metals', 'phys:bturb',
+                'phys:hescale']:
     option_types[flt_opt] = float
 option_types['phys:ext_press'] = bool
 
@@ -59,7 +60,11 @@ def default(save=False):
                                         #   eagle - use cooling rate table from Eagle
                                         #   original - use Ryan's original thermal equilibrium function
                                         #   relhic - use tabulated nH-T relation from ABL paper
-    options['phys'] = physpar
+    physpar['bturb'  ] = 0.0        # Value of turbulent Doppler parameter in km/s
+    physpar['metals' ] = 1.0E-3     # metallicity relative to solar
+    physpar['gastemp'] = 20000      # initial gas temperature in Kelvin
+    physpar['hescale'] = 1.0        # Constant to scale the helium abundance by
+    options['phys'   ] = physpar
 
     # Set grid of parameters
     # Each option should be a string containing a statement that gets eval'd to produce an interable of parameter values
@@ -85,7 +90,7 @@ def read_options(filename):
     # Start with default settings
     options = default()
 
-    logger.init(level='debug', name='warning')
+    logger.init(level='warning', name='options')
     
     parser = configparser.ConfigParser()
     config = parser.read(filename)
@@ -94,8 +99,13 @@ def read_options(filename):
         if section in options.keys():
             for key in parser[section]:
                 if key in options[section].keys():
-                    options[section][key] = option_types['{}:{}'.format(section, key)](parser[section][key])
-                    logger.log('debug', "New setting for option {}:{} is {}".format(section, key, parser[section][key]), 'options')
+                    try:
+                        options[section][key] = option_types['{}:{}'.format(section, key)](parser[section][key])
+                    except ValueError:
+                        logger.log('error', "Bad value {} for option {}:{}, using default {}"
+                                   .format(parser[section][key], section, key, options[section][key]), 'options')
+                    logger.log('debug', "New setting for option {}:{} is {}"
+                               .format(section, key, parser[section][key]), 'options')
                 else:
                     logger.log('warning', "Input file option {:s} is invalid".format(key), 'options')
         else:

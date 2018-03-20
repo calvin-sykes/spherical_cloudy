@@ -11,12 +11,6 @@ import constants
 import cosmo
 import logger
 
-bturb = 0.0 #3.0
-metals = 1.0E-3
-ions = ['H I', 'D I', 'He I', 'He II']
-
-gastemp = 20000.0
-
 def init_outdir(options):
     out_dir = 'output/' + options['run']['outdir'] + '/'
     if not os.path.exists(out_dir):
@@ -122,6 +116,9 @@ if __name__ == '__main__':
     virialm, redshift, baryscale, HMscale = init_grid(opt)
     nummvir, numreds, numbary, numHMscl = map(len, (virialm, redshift, baryscale, HMscale))
 
+    # Set the ions used in the models
+    ions = ['H I', 'D I', 'He I', 'He II']
+
     # Load baryon fraction as a function of halo mass
     halomass, barymass = np.loadtxt('data/baryfrac.dat', unpack=True)
     baryfracvals = 10.0**barymass / 10.0**halomass
@@ -175,7 +172,7 @@ if __name__ == '__main__':
 
             # Let's go!
             if not dryrun:
-                ok, res = gethalo.get_halo(model,redshift[k],gastemp,bturb,Hescale=1.0,metals=metals,cosmopar=cosmopar,ions=ions,prevfile=prev_fname,options=opt)
+                ok, res = gethalo.get_halo(model, redshift[k], cosmopar=cosmopar, ions=ions, prevfile=prev_fname, options=opt)
                 if ok == True:
                     prev_fname = res
                     opt['run']['refine'] = False

@@ -895,20 +895,11 @@ def pressure(double[::1] temp not None,
             for x in range(0,r):
                 xvala = radius[x+1]/rscale
                 xvalb = radius[x]/rscale
-                cssqa = (((kB/mH)*temp[x+1])/mpp[x+1])# + (0.75*bturb*bturb)
-                cssqb = (((kB/mH)*temp[x])/mpp[x])# + (0.75*bturb*bturb)
+                cssqa = (((kB/mH)*temp[x+1])/mpp[x+1]) + (0.75*bturb*bturb)
+                cssqb = (((kB/mH)*temp[x])/mpp[x]) + (0.75*bturb*bturb)
                 if xvalb == 0.0:
                     xint += 0.5*(fm(xvala)/(cssqa*xvala*xvala)) * (xvala-xvalb)
                 else:
-                    #with gil:
-                    #    tst = fm(xvalb)
-                    #    if tst != tst:
-                    #        print('b', tst, x, xvalb, temp[x], mpp[x], acore)
-                    #        assert 0
-                    #    tst = fm(xvala)
-                    #    if tst != tst:
-                    #        print('a', tst, x+1, xvala, temp[x+1], mpp[x+1], acore)
-                    #        assert 0
                     xint += 0.5*((fm(xvala)/(cssqa*xvala*xvala)) + fm(xvalb)/(cssqb*xvalb*xvalb)) * (xvala-xvalb)
             retarr[r] = cexp(-vssq*xint)
         retarr[0] = 1.0

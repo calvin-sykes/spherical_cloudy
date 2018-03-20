@@ -129,26 +129,33 @@ def mangle_string(str):
     return str.replace(".","d").replace("+","p").replace("-","m")
 
 
-def get_halo(hmodel,redshift,gastemp,bturb,metals=1.0,Hescale=1.0,cosmopar=np.array([0.673,0.04910,0.685,0.315]),ions=["H I", "He I", "He II"],prevfile=None,options=None):
+def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
+             ions=["H I", "He I", "He II"], prevfile=None, options=None):
     """
-    bturb     : turbulent Doppler parameter
-    metals    : Scale the metals by a constant
     cosmopar  : Set the cosmology of the simulation (hubble constant/100 km/s/Mpc, Omega_B, Omega_L, Omega_M)
     ions      : A list of ions to consider
     """
+
+    bturb   = options['phys']['bturb'  ]
+    gastemp = options['phys']['gastemp']
+    metals  = options['phys']['metals' ]
+    Hescale = options['phys']['hescale']
+    
     # Begin the timer
     timeA = time.time()
 
     if options is None:
         options = getoptions.default()
+        logger.log('warn', "No inputs provided to get_halo, using defaults (You probably don't want this!)")
+
     # Set some numerical aspects of the simulation
     miniter = options["run"]["miniter"]
     maxiter = options["run"]["maxiter"]
     npts    = options["run"]["nsample"]
-    nummu   = options["run"]["nummu"]
+    nummu   = options["run"]["nummu"  ]
     concrit = options["run"]["concrit"]
-    ncpus   = options["run"]["ncpus"]
-    refine  = options["run"]["refine"]
+    ncpus   = options["run"]["ncpus"  ]
+    refine  = options["run"]["refine" ]
 
     # Method used to define the radial coordinate
     # depends on whether we are refining a model
@@ -167,6 +174,7 @@ def get_halo(hmodel,redshift,gastemp,bturb,metals=1.0,Hescale=1.0,cosmopar=np.ar
     protmss = const["protmss"]
     hztos   = const["hztos"]
 
+    # type of DM profile and outer radius in units of Rvir
     geom = options["geometry"]["profile"]
     geomscale = options["geometry"]["scale"]
 
