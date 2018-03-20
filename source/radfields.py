@@ -1,6 +1,8 @@
 import numpy as np
-import calc_Jnur
+import cython_fns
 from matplotlib import pyplot as plt
+import constants
+import logger
 
 def HMbackground_z0_sternberg(nu=None,maxvu=200.0,num=10000):
     Jnu0 = 2.0E-23
@@ -21,16 +23,18 @@ def HMbackground_z0_sternberg(nu=None,maxvu=200.0,num=10000):
     J[w] *= 1.051E2 * nu[w]**-1.5
     return J, nu*nu0
 
-def HMbackground(elID,redshift=3.0,options=None):
-    if options is None: options = getoptions.default()
-    planck  = options["const"]["planck"]
-    elvolt  = options["const"]["elvolt"]
-    usecols=()
-    for i in range(60): usecols += (i,)
-    data = np.loadtxt("HM12_UVB.dat", usecols=usecols)
+def HMbackground(elID,redshift=3.0, HMversion='12'):
+    const = constants.get()
+    planck  = const["planck"]
+    elvolt  = const["elvolt"]
+    if HMversion == '12':
+        usecols = tuple(range(60))
+    elif HMversion == '05':
+        usecols = tuple(range(50))
+    data = np.loadtxt("HM{:s}_UVB.dat".format(HMversion), usecols=usecols)
     rdshlist = data[0,:]
     amin = np.argmin(np.abs(rdshlist-redshift))
-    print "Using HM background at z={0:f}".format(rdshlist[amin])
+    logger.log("info", "Using HM{1:s} background at z={0:f}".format(rdshlist[amin], HMversion))
     waveAt, Jnut = data[1:,0], data[1:,amin+1]
     waveA = waveAt[1:]*1.0E-10
     #w = np.where(waveAt < 912.0)
@@ -53,8 +57,8 @@ def HMbackground(elID,redshift=3.0,options=None):
     Jnuadd = np.zeros(2*len(ekeys) + 2*7) # 7 additional points for secondary heat/ionizations
     nuadd  = np.zeros(2*len(ekeys) + 2*7) # 7 additional points for secondary heat/ionizations
     for i in range(len(ekeys)):
-        nup = (elID[ekeys[i]][2]+ediff)*elvolt/planck
-        num = (elID[ekeys[i]][2]-ediff)*elvolt/planck
+        nup = (elID[ekeys[i]].ip+ediff)*elvolt/planck
+        num = (elID[ekeys[i]].ip-ediff)*elvolt/planck
         Jnuvp = np.interp(nup,nurev,Jnurev)
         Jnuvm = np.interp(nup,nurev,Jnurev)
         nuadd[2*i]    = nup
@@ -67,8 +71,8 @@ def HMbackground(elID,redshift=3.0,options=None):
     extra = 28.0
     cntr = 2*len(ekeys)
     for i in range(len(ekeysA)):
-        nup = (elID[ekeysA[i]][2]+extra+ediff)*elvolt/planck
-        num = (elID[ekeysA[i]][2]+extra-ediff)*elvolt/planck
+        nup = (elID[ekeysA[i]].ip+extra+ediff)*elvolt/planck
+        num = (elID[ekeysA[i]].ip+extra-ediff)*elvolt/planck
         Jnuvp = np.interp(nup,nurev,Jnurev)
         Jnuvm = np.interp(nup,nurev,Jnurev)
         nuadd[2*i+cntr]    = nup
@@ -80,8 +84,8 @@ def HMbackground(elID,redshift=3.0,options=None):
     extra = 11.0
     cntr = 2*len(ekeys) + 2*4
     for i in range(len(ekeysB)):
-        nup = (elID[ekeysB[i]][2]+extra+ediff)*elvolt/planck
-        num = (elID[ekeysB[i]][2]+extra-ediff)*elvolt/planck
+        nup = (elID[ekeysB[i]].ip+extra+ediff)*elvolt/planck
+        num = (elID[ekeysB[i]].ip+extra-ediff)*elvolt/planck
         Jnuvp = np.interp(nup,nurev,Jnurev)
         Jnuvm = np.interp(nup,nurev,Jnurev)
         nuadd[2*i+cntr]    = nup
@@ -97,10 +101,10 @@ def HMbackground(elID,redshift=3.0,options=None):
     #plt.show()
     return Jnut[argsrt], nut[argsrt]
 
-def powerlaw(elID,options=None):
-    if options is None: options = getoptions.default()
-    planck  = options["const"]["planck"]
-    elvolt  = options["const"]["elvolt"]
+def powerlaw(elID,):
+    const = constants.get()
+    planck  = const["planck"]
+    elvolt  = const["elvolt"]
     try:
         nurevt, Jnurevt = np.loadtxt(options["radfield"]+".radfield",unpack=True)
         # Now load the HM spectrum to get the same frequency scale
@@ -116,15 +120,15 @@ def powerlaw(elID,options=None):
         nurev  = nu[::-1]
         Jnurev = np.interp(nurev, nurevt, Jnurevt)
     except:
-        print "Radiation field file: {0:s} does not exist".format(options["radfield"]+".radfield")
+        logger.log("critical", "Radiation field file: {0:s} does not exist".format(options["radfield"]+".radfield"))
         sys.exit()
     ediff = 1.0E-10
     ekeys = elID.keys()
     Jnuadd = np.zeros(2*len(ekeys) + 2*7) # 7 additional points for secondary heat/ionizations
     nuadd  = np.zeros(2*len(ekeys) + 2*7) # 7 additional points for secondary heat/ionizations
     for i in range(len(ekeys)):
-        nup = (elID[ekeys[i]][2]+ediff)*elvolt/planck
-        num = (elID[ekeys[i]][2]-ediff)*elvolt/planck
+        nup = (elID[ekeys[i]].ip+ediff)*elvolt/planck
+        num = (elID[ekeys[i]].ip-ediff)*elvolt/planck
         Jnuvp = np.interp(nup,nurev,Jnurev)
         Jnuvm = np.interp(nup,nurev,Jnurev)
         nuadd[2*i]    = nup
@@ -137,8 +141,8 @@ def powerlaw(elID,options=None):
     extra = 28.0
     cntr = 2*len(ekeys)
     for i in range(len(ekeysA)):
-        nup = (elID[ekeysA[i]][2]+extra+ediff)*elvolt/planck
-        num = (elID[ekeysA[i]][2]+extra-ediff)*elvolt/planck
+        nup = (elID[ekeysA[i]].ip+extra+ediff)*elvolt/planck
+        num = (elID[ekeysA[i]].ip+extra-ediff)*elvolt/planck
         Jnuvp = np.interp(nup,nurev,Jnurev)
         Jnuvm = np.interp(nup,nurev,Jnurev)
         nuadd[2*i+cntr]    = nup
@@ -150,8 +154,8 @@ def powerlaw(elID,options=None):
     extra = 11.0
     cntr = 2*len(ekeys) + 2*4
     for i in range(len(ekeysB)):
-        nup = (elID[ekeysB[i]][2]+extra+ediff)*elvolt/planck
-        num = (elID[ekeysB[i]][2]+extra-ediff)*elvolt/planck
+        nup = (elID[ekeysB[i]].ip+extra+ediff)*elvolt/planck
+        num = (elID[ekeysB[i]].ip+extra-ediff)*elvolt/planck
         Jnuvp = np.interp(nup,nurev,Jnurev)
         Jnuvm = np.interp(nup,nurev,Jnurev)
         nuadd[2*i+cntr]    = nup
@@ -167,10 +171,10 @@ def powerlaw(elID,options=None):
     #plt.show()
     return Jnut[argsrt], nut[argsrt]
 
-def test_background(elID,options=None):
-    if options is None: options = getoptions.default()
-    planck  = options["const"]["planck"]
-    elvolt  = options["const"]["elvolt"]
+def test_background(elID):
+    const = constants.get()
+    planck  = const["planck"]
+    elvolt  = const["elvolt"]
     nurev, Jnurev = np.loadtxt("test_continuum3.dat",unpack=True)
     #Jnurev /= (2.0)
     print "Using test background radiation field (table power law -1)"
@@ -179,8 +183,8 @@ def test_background(elID,options=None):
     Jnuadd = np.zeros(2*len(ekeys) + 2*7) # 7 additional points for secondary heat/ionizations
     nuadd  = np.zeros(2*len(ekeys) + 2*7) # 7 additional points for secondary heat/ionizations
     for i in range(len(ekeys)):
-        nup = (elID[ekeys[i]][2]+ediff)*elvolt/planck
-        num = (elID[ekeys[i]][2]-ediff)*elvolt/planck
+        nup = (elID[ekeys[i]].ip+ediff)*elvolt/planck
+        num = (elID[ekeys[i]].ip-ediff)*elvolt/planck
         Jnuvp = np.interp(nup,nurev,Jnurev)
         Jnuvm = np.interp(nup,nurev,Jnurev)
         nuadd[2*i]    = nup
@@ -193,8 +197,8 @@ def test_background(elID,options=None):
     extra = 28.0
     cntr = 2*len(ekeys)
     for i in range(len(ekeysA)):
-        nup = (elID[ekeysA[i]][2]+extra+ediff)*elvolt/planck
-        num = (elID[ekeysA[i]][2]+extra-ediff)*elvolt/planck
+        nup = (elID[ekeysA[i]].ip+extra+ediff)*elvolt/planck
+        num = (elID[ekeysA[i]].ip+extra-ediff)*elvolt/planck
         Jnuvp = np.interp(nup,nurev,Jnurev)
         Jnuvm = np.interp(nup,nurev,Jnurev)
         nuadd[2*i+cntr]    = nup
@@ -206,8 +210,8 @@ def test_background(elID,options=None):
     extra = 11.0
     cntr = 2*len(ekeys) + 2*4
     for i in range(len(ekeysB)):
-        nup = (elID[ekeysB[i]][2]+extra+ediff)*elvolt/planck
-        num = (elID[ekeysB[i]][2]+extra-ediff)*elvolt/planck
+        nup = (elID[ekeysB[i]].ip+extra+ediff)*elvolt/planck
+        num = (elID[ekeysB[i]].ip+extra-ediff)*elvolt/planck
         Jnuvp = np.interp(nup,nurev,Jnurev)
         Jnuvm = np.interp(nup,nurev,Jnurev)
         nuadd[2*i+cntr]    = nup

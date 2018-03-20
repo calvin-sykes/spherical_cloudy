@@ -1,4 +1,7 @@
 import misc
+from collections import namedtuple
+
+ElemID = namedtuple('ElemID', ['id', 'abund', 'ip'])
 
 def abundances(elem, scale):
     # If scale is a log10 value, convert to linear
@@ -81,7 +84,7 @@ def getids(useelems, scale=1.0):
             if strval in useelems:
                 for k in range(len(useelems)):
                     if useelems[k] == strval:
-                        iddict[strval] = [k,abund,ip]
+                        iddict[strval] = ElemID(k,abund,ip)
                         break
     for i in range(len(zeroabund)):
         e = zeroabund[i]
