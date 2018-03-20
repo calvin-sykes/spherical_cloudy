@@ -4,7 +4,7 @@ import scipy.interpolate
 
 interp = None
 
-def load_cf(prim_He):
+def load_eagle_cf(prim_He):
     f = h5py.File('/cosma5/data/Eagle/BG_Tables/CoolingTables/z_0.000.hdf5', 'r')
     data = f['Metal_free']
 
@@ -24,3 +24,9 @@ def load_cf(prim_He):
     #tempvals = np.logspace(3, 6, 1000)
 
     return interp #tempvals, densvals, np.abs(interp(tempvals, densvals))
+
+def load_relhic_nHT():
+    dens, temp = np.loadtxt('./data/relhic_nHT.dat', unpack=True)
+    interp = scipy.interpolate.InterpolatedUnivariateSpline(dens, temp)
+
+    return interp

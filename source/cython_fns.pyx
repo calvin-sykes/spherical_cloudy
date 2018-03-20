@@ -870,6 +870,7 @@ def pressure(double[::1] temp not None,
         fm = &Burkert_fm
     elif hmodel.name == "Cored":
         fm = &Cored_fm
+        global acore
         acore = hmodel.acore
 
     rhods = hmodel.rhods
@@ -888,7 +889,6 @@ def pressure(double[::1] temp not None,
     sz_r  = radius.shape[0]
     cdef double[::1] retarr = np.zeros((sz_r), dtype=DTYPE)
 
-    print "Calculating pressure profile"
     with nogil:
         for r in range(1,sz_r):
             xint = 0.0
@@ -900,6 +900,15 @@ def pressure(double[::1] temp not None,
                 if xvalb == 0.0:
                     xint += 0.5*(fm(xvala)/(cssqa*xvala*xvala)) * (xvala-xvalb)
                 else:
+                    #with gil:
+                    #    tst = fm(xvalb)
+                    #    if tst != tst:
+                    #        print('b', tst, x, xvalb, temp[x], mpp[x], acore)
+                    #        assert 0
+                    #    tst = fm(xvala)
+                    #    if tst != tst:
+                    #        print('a', tst, x+1, xvala, temp[x+1], mpp[x+1], acore)
+                    #        assert 0
                     xint += 0.5*((fm(xvala)/(cssqa*xvala*xvala)) + fm(xvalb)/(cssqb*xvalb*xvalb)) * (xvala-xvalb)
             retarr[r] = cexp(-vssq*xint)
         retarr[0] = 1.0
@@ -913,7 +922,7 @@ def fgasx(double[::1] densitym not None,
           double[::1] radius not None,
           double rscale):
     """
-    Calculate the total gas mass within the each radius (numerically integrate)
+    Calculate the total gas mass within each radius (numerically integrate)
     """
     cdef int sz_r
     cdef int r
@@ -922,7 +931,6 @@ def fgasx(double[::1] densitym not None,
     sz_r  = radius.shape[0]
     cdef double[::1] retarr = np.zeros((sz_r), dtype=DTYPE)
 
-    print "Calculating total gas mass"
     with nogil:
         for r in range(1,sz_r):
             rint += 0.5*((densitym[r]*(radius[r]/rscale)**2) + (densitym[r-1]*(radius[r-1]/rscale)**2)) * (radius[r]-radius[r-1])/rscale

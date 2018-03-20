@@ -2,6 +2,7 @@ import numpy as np
 import cython_fns
 from matplotlib import pyplot as plt
 import constants
+import logger
 
 def HMbackground_z0_sternberg(nu=None,maxvu=200.0,num=10000):
     Jnu0 = 2.0E-23
@@ -22,16 +23,18 @@ def HMbackground_z0_sternberg(nu=None,maxvu=200.0,num=10000):
     J[w] *= 1.051E2 * nu[w]**-1.5
     return J, nu*nu0
 
-def HMbackground(elID,redshift=3.0):
+def HMbackground(elID,redshift=3.0, HMversion='12'):
     const = constants.get()
     planck  = const["planck"]
     elvolt  = const["elvolt"]
-    usecols=()
-    for i in range(60): usecols += (i,)
-    data = np.loadtxt("HM12_UVB.dat", usecols=usecols)
+    if HMversion == '12':
+        usecols = tuple(range(60))
+    elif HMversion == '05':
+        usecols = tuple(range(50))
+    data = np.loadtxt("HM{:s}_UVB.dat".format(HMversion), usecols=usecols)
     rdshlist = data[0,:]
     amin = np.argmin(np.abs(rdshlist-redshift))
-    print "Using HM background at z={0:f}".format(rdshlist[amin])
+    logger.log("info", "Using HM{1:s} background at z={0:f}".format(rdshlist[amin], HMversion))
     waveAt, Jnut = data[1:,0], data[1:,amin+1]
     waveA = waveAt[1:]*1.0E-10
     #w = np.where(waveAt < 912.0)
@@ -117,7 +120,7 @@ def powerlaw(elID,):
         nurev  = nu[::-1]
         Jnurev = np.interp(nurev, nurevt, Jnurevt)
     except:
-        print "Radiation field file: {0:s} does not exist".format(options["radfield"]+".radfield")
+        logger.log("critical", "Radiation field file: {0:s} does not exist".format(options["radfield"]+".radfield"))
         sys.exit()
     ediff = 1.0E-10
     ekeys = elID.keys()
