@@ -11,39 +11,11 @@ import constants
 import cosmo
 import logger
 
-bturb = 3.0
+bturb = 0.0 #3.0
 metals = 1.0E-3
 ions = ['H I', 'D I', 'He I', 'He II']
 
 gastemp = 20000.0
-
-#mn_mvir = 8.0
-#mx_mvir = 9.65
-#nummvir = 21
-
-mn_reds = 0.0
-mx_reds = 0.0
-numreds = 1
-
-mn_bary = 1.0
-mx_bary = 1.0
-numbary = 1
-
-mn_HMscl = 1.0
-mx_HMscl = 1.0
-numHMscl = 1
-
-virialm = np.concatenate([np.arange(8.0, 9.0, 0.1), np.arange(9.0, 9.5, 0.05), np.arange(9.5, 9.65, 0.01)])
-nummvir = len(virialm)
-
-redshift = np.linspace(mn_reds,mx_reds,numreds)
-baryscale = np.linspace(mn_bary,mx_bary,numbary)
-HMscale = np.linspace(mn_HMscl,mx_HMscl,numHMscl)
-
-# Load baryon fraction as a function of halo mass
-halomass, barymass = np.loadtxt('data/baryfrac.dat', unpack=True)
-baryfracvals = 10.0**barymass / 10.0**halomass
-baryfrac = np.interp(virialm, halomass, baryfracvals)
 
 def init_outdir(options):
     out_dir = 'output/' + options['run']['outdir'] + '/'
@@ -62,37 +34,55 @@ def init_log(options):
 # Find the name of a previously written file, and initialise loop counters
 # such that the run starts from reading back this file
 def init_resume(options):
-    wd = os.getcwd()
-    out_path = options['run']['outdir']
-    os.chdir(out_path)
-    files = sorted(os.listdir('.'))
-    files = list(filter(lambda fn: fn.endswith('.npy'), files))
-    # return to working directory
-    os.chdir(wd)
     where = options['run']['resume']
-    if where == 'last':
-        file_idx = len(files) - 1
-    elif where == 'refine_last':
-        file_idx = len(files) - 1
-        options['refine'] = True
-    elif where.isdigit():
-        file_idx = int(where)
+    if where == 'none':
+        fname = None
+        smvir, sHMscl, sbary, sreds = 0, 0, 0, 0
     else:
-        logger.log('critical', "Couldn't understand resume command {}".format(where))
-        sys.exit(1)
-    if file_idx < 0:
-        file_idx = len(files) + file_idx
-    fname = out_path + files[file_idx]
-    # if we are refining, want to repeat the loaded model not use it to run the next one
-    if where == 'refine_last':
-        model_idx = file_idx
-    else:
-        model_idx = file_idx + 1 # files are 0-indexed, models are 1-indexed
-    smvir = model_idx % nummvir
-    sHMscl = (model_idx // nummvir) % numHMscl
-    sbary = (model_idx // (nummvir * numHMscl)) % numbary
-    sreds = (model_idx // (nummvir * numHMscl * numbary))
+        wd = os.getcwd()
+        out_path = options['run']['outdir']
+        os.chdir(out_path)
+        files = sorted(os.listdir('.'))
+        files = list(filter(lambda fn: fn.endswith('.npy'), files))
+        # return to working directory
+        os.chdir(wd)
+        where = options['run']['resume']
+        if where == 'last':
+            file_idx = len(files) - 1
+        elif where == 'refine_last':
+            file_idx = len(files) - 1
+            options['refine'] = True
+        elif where.isdigit():
+            file_idx = int(where)
+        else:
+            logger.log('critical', "Couldn't understand resume command {}".format(where))
+            sys.exit(1)
+        if file_idx < 0:
+            file_idx = len(files) + file_idx
+        fname = out_path + files[file_idx]
+        # if we are refining, want to repeat the loaded model not use it to run the next one
+        if where == 'refine_last':
+            model_idx = file_idx
+        else:
+            model_idx = file_idx + 1 # files are 0-indexed, models are 1-indexed
+        smvir = model_idx % nummvir
+        sHMscl = (model_idx // nummvir) % numHMscl
+        sbary = (model_idx // (nummvir * numHMscl)) % numbary
+        sreds = (model_idx // (nummvir * numHMscl * numbary))
     return (fname, smvir, sHMscl, sbary, sreds)
+
+def init_grid(options):
+    try:
+        virialm = eval(options['grid']['virialm'])
+        redshift = eval(options['grid']['redshift'])
+        baryscale = eval(options['grid']['baryscale'])
+        radscale = eval(options['grid']['radscale'])
+    except:
+        logger.log('critical', "Failed to eval grid specification.")
+        logger.log('critical', traceback.format_exc())
+        sys.exit(1)
+
+    return (virialm, redshift, baryscale, radscale)
 
 ################
 ## START HERE ##
@@ -127,14 +117,15 @@ if __name__ == '__main__':
 
     logger.log('info', "Using input file {}".format(input_file))
 
-    if opt['run']['resume'] != 'none':
-        prev_fname, smvir, sHMscl, sbary, sreds = init_resume(opt)
-    else:
-        sreds = 0
-        sbary = 0
-        sHMscl = 0
-        smvir = 0
-        prev_fname = None
+    prev_fname, smvir, sHMscl, sbary, sreds = init_resume(opt)
+
+    virialm, redshift, baryscale, HMscale = init_grid(opt)
+    nummvir, numreds, numbary, numHMscl = map(len, (virialm, redshift, baryscale, HMscale))
+
+    # Load baryon fraction as a function of halo mass
+    halomass, barymass = np.loadtxt('data/baryfrac.dat', unpack=True)
+    baryfracvals = 10.0**barymass / 10.0**halomass
+    baryfrac = np.interp(virialm, halomass, baryfracvals)
 
     # Get the working cosmology
     cosmopar = cosmo.get_cosmo()
