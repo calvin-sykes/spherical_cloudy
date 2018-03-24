@@ -39,7 +39,7 @@ def load_relhic_nHT():
     fit_params = scipy.optimize.curve_fit(plaw_fit, np.log10(dens[fitting_region]), np.log10(temp[fitting_region]))[0]
     logger.log('debug', "Fitted RELHIC nH-T extrapolation with params: ({}, {}, {})".format(*fit_params))
 
-    extrapolation_region = np.linspace(0.01, 2, 50)
+    extrapolation_region = np.linspace(0.01, 10, 100)
     extrap_dens = np.append(dens, 10**extrapolation_region)
     extrap_temp = np.append(temp, 10**plaw_fit(extrapolation_region, *fit_params))
 
