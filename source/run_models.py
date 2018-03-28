@@ -42,7 +42,7 @@ def init_resume(options):
         os.chdir(wd)
         where = options['run']['resume']
         if where == 'last':
-            file_idx = len(files) - 1
+            file_idx = len(files) - 2
         elif where == 'refine_last':
             file_idx = len(files) - 1
             options['refine'] = True
@@ -111,10 +111,10 @@ if __name__ == '__main__':
 
     logger.log('info', "Using input file {}".format(input_file))
 
-    prev_fname, smvir, sHMscl, sbary, sreds = init_resume(opt)
-
     virialm, redshift, baryscale, HMscale = init_grid(opt)
     nummvir, numreds, numbary, numHMscl = map(len, (virialm, redshift, baryscale, HMscale))
+
+    prev_fname, smvir, sHMscl, sbary, sreds = init_resume(opt)
 
     # Set the ions used in the models
     ions = ['H I', 'D I', 'He I', 'He II']
