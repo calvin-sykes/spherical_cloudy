@@ -282,6 +282,10 @@ def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
         if geom in {"NFW", "Burkert", "Cored"}:
             logger.log("info", "Loading file {0:s}".format(prevfile))
             tdata = np.load(prevfile)
+            # if the data is stored as a 'structured' array (one with fieldnames)
+            # then it needs to be viewd as a plain array to select individual columns
+            if tdata.dtype.names is not None:
+                tdata = tdata.view(tdata.dtype[0])
             strt = 6
             numarr = tdata.shape[1]
             arridx = dict({})
