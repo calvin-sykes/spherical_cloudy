@@ -46,11 +46,12 @@ def init_resume(options):
         elif where == 'refine_last':
             file_idx = len(files) - 1
             options['refine'] = True
-        elif where.isdigit():
-            file_idx = int(where)
         else:
-            logger.log('critical', "Couldn't understand resume command {}".format(where))
-            sys.exit(1)
+            try:
+                file_idx = int(where)
+            except ValueError:
+                logger.log('critical', "Couldn't understand resume command {}".format(where))
+                sys.exit(1)
         if file_idx < 0:
             file_idx = len(files) + file_idx
         fname = out_path + files[file_idx]
