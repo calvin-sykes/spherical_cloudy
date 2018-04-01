@@ -4,6 +4,16 @@ http://www-cfadc.phy.ornl.gov/astro/ps/data/
 """
 import numpy as np
 import cython_fns
+import matplotlib.pyplot as plt
+
+def remove_discontinuity(arr):
+    loc_dc = np.argmax(np.abs(np.diff(arr))) #np.argmin(np.abs(arr + 1.0))
+    guess_diff = 0.5 * (np.diff(arr)[loc_dc-1] + np.diff(arr)[loc_dc+1])
+    sz_dc = np.diff(arr)[loc_dc] - guess_diff
+    corr = np.zeros_like(arr)
+    corr[0:loc_dc+1] = sz_dc   
+    rdc_arr = arr + corr
+    return rdc_arr
 
 # Sharing function
 def yfactor(ion, xsec_HI, xsec_HeI, xsec_HeII, prof_HI, prof_HeI, prof_HeII, engyval, energy):
@@ -95,7 +105,7 @@ def rate_function(engy, Et, Emx, Eo, so, ya, P, yw, yo, y1):
     xsec[w] = 1.0E-18 * so * Fy[w]
     return xsec
 
-def other(ion,engy,profdens,densitynH,Yprof,electrondensity,phelxs,prof_temperature,elID,kB,elvolt, **kwargs):
+def other(ion,engy,profdens,densitynH,Yprof,electrondensity,phelxs,prof_temperature,elID,kB,elvolt):
     eHI   = elID["H I"].id
     eHeI  = elID["He I"].id
     eHeII = elID["He II"].id
@@ -126,7 +136,15 @@ def other(ion,engy,profdens,densitynH,Yprof,electrondensity,phelxs,prof_temperat
         tmpH   = 1.0-Yprof[eHI]
         recomb = np.zeros(npts)
         recomb[w_HI]  = ((tmpH*densitynH*elID["H I"].abund*electrondensity) * alpha1s_HI(prof_temperature) * yfactor("HI", *yf_args, energy=elID["H I"].ip+1.0E-7*kB*prof_temperature/elvolt))[w_HI]/prof_HI[w_HI]
+
         gammarate = B3_HI + B7_HI + recomb
+
+        if False and np.max(np.abs(np.diff(np.log10(gammarate)))) > 0.1:
+            print('HI Y')
+            plt.figure()
+            plt.plot(Yprof[eHI])
+            plt.show()
+        
     elif ion == "D I":
         gammarate = np.zeros(npts)
     elif ion == "He I":
