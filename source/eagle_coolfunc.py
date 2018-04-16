@@ -1,7 +1,13 @@
 import numpy as np
-import h5py
 import scipy.interpolate
 import scipy.optimize
+
+# suppress deprecation warning
+import warnings
+warnings.simplefilter(action='ignore', category=FutureWarning)
+import h5py
+#warnings.resetwarnings()
+del warnings
 
 import logger
 
