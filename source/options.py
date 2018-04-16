@@ -3,6 +3,9 @@ import configparser
 
 import logger
 
+## NOTE: If options are added to the program b changing the dictionaries defined below,
+##       this file needs to be executed as a standalone script to update the default config file
+
 # What types each setting should be
 option_types = collections.defaultdict(lambda: int) # default to integer type
 for str_opt in ['geometry:profile', 'UVB:spectrum', 'phys:temp_method', 'run:outdir', 'run:resume', 'log:level', 'log:file',
@@ -11,7 +14,8 @@ for str_opt in ['geometry:profile', 'UVB:spectrum', 'phys:temp_method', 'run:out
 for flt_opt in ['geometry:scale', 'geometry:acore', 'UVB:scale', 'run:concrit', 'phys:gastemp', 'phys:metals', 'phys:bturb',
                 'phys:hescale']:
     option_types[flt_opt] = float
-option_types['phys:ext_press'] = bool
+for bool_opt in ['phys:ext_press', 'run:do_ref']:
+    option_types[bool_opt] = bool
 
 # Default settings for options
 def default(save=False):
@@ -30,7 +34,8 @@ def default(save=False):
                                    #   'last': pick up from the most recent file
                                    #   'refine_last' : take the most recent file and try to refine it to get rid of the discontinuity
                                    #   number: pick up from this index in the models *already run* (negative is from the end backward)
-    options['run']    = runpar
+    runpar['do_ref' ] = False    # Whether to attempt refining
+    options['run'   ] = runpar
 
     # Set logging settings
     logpar = dict({})

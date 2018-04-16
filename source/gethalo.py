@@ -108,7 +108,7 @@ def get_radius(virialr, scale, npts, method=0, **kwargs):
         num_hires = 200
         width_hires = 0.3
         num_other = npts - num_hires
-        radius = np.geomspace(virialr * 1.0E-4, (1 - width_hires) * rad_neutral, int((float(loc_neutral) / npts) * num_other))
+        radius = np.append(0, np.geomspace(virialr * 1.0E-4, (1 - width_hires) * rad_neutral, int((float(loc_neutral) / npts) * num_other) - 1))
         len1 = len(radius)
         radius = np.append(radius, np.geomspace((1 - width_hires) * rad_neutral, (1 + width_hires) * rad_neutral, num_hires))
         len2 = len(radius)
@@ -128,7 +128,7 @@ def get_radius(virialr, scale, npts, method=0, **kwargs):
         #radius = np.append(radius, 10.0*np.linspace(virialr*scale,100.0*virialr*scale,lover)[1:])
     elif method == 2:
         # Log scaling
-        radius = np.geomspace(virialr * 1.0E-4, virialr * scale, npts)
+        radius = np.append(0, np.geomspace(virialr * 1.0E-4, virialr * scale, npts - 1))
     else:
         logger.log("critical", "radius method is not yet defined")
         sys.exit()
@@ -168,6 +168,7 @@ def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
     nummu   = options["run"]["nummu"  ]
     concrit = options["run"]["concrit"]
     ncpus   = options["run"]["ncpus"  ]
+    do_ref  = options["run"]["do_ref" ]
     refine  = options["run"]["refine" ]
 
     # Method used to define the radial coordinate
@@ -608,6 +609,14 @@ def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
         if iteration > 42:
             extra_plots = True
 
+        #plt.figure()
+        #plt.plot(Yprofs[0])
+        #plt.show()
+        #
+        #plt.figure()
+        #plt.plot(np.log10(prof_rates[elID["H I"].id]))
+        #plt.show()
+
         ## BEGIN INNER ITERATION
         while True:
             if False and extra_plots:
@@ -621,6 +630,7 @@ def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
 
             # Test if the profiles have converged
             tstconv = ( (np.abs((tmp_Yprofs-Yprofs)/Yprofs)<concrit**2)|(Yprofs==0.0)).astype(np.int).sum(axis=1)
+            
             # Reset ne and the rates
             electrondensity = densitynH * ( (1.0-Yprofs[elID["H I"].id]) + prim_He*Yprofs[elID["He II"].id] + 2.0*prim_He*(1.0-Yprofs[elID["He I"].id]-Yprofs[elID["He II"].id]) )
             edens_allions = electrondensity.reshape((1,npts)).repeat(nions,axis=0)
@@ -896,13 +906,31 @@ def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
     ## END MAIN LOOP
 
     # smooth density and H I Y profile
-    densitynH = 10**remove_discontinuity(np.log10(densitynH))
-    max_delta = np.log10(radius[np.argmax(np.abs(np.diff(Yprofs[elID["H I"].id])))])
+    # only needed if Y profile becomes neutral
+    if np.max(Yprofs[elID["H I"].id]) > 0.8:
+        densitynH = 10**remove_discontinuity(np.log10(densitynH))
+        prof_temperature = 10**remove_discontinuity(np.log10(prof_temperature))
 
-    f0 = (0.5, 0.5, max_delta, 0.05)
-    fit, _ = spCurveFit(sigmoid, np.log10(radius), Yprofs[elID["H I"].id], p0=f0,
-                        bounds=([0, 0, -np.inf, -np.inf], [0.5, 0.5, np.inf, np.inf]))
-    Yprofs[elID["H I"].id] = sigmoid(np.log10(radius), *fit)
+        tmp_rad = radius.copy()
+        # cannot have zero radius for fitting
+        # instead interpolate from subsequent coordinates
+        ratio = np.log10(tmp_rad[2]) - np.log10(tmp_rad[1])
+        tmp_rad[0] = 10**(np.log10(tmp_rad[1]) - ratio)
+        # centre of sigmoid should be near the discontinuity
+        max_delta = np.log10(radius[np.argmax(np.abs(np.diff(Yprofs[elID["H I"].id])))])
+        f0 = (0.5, 0.5, max_delta, 0.05)
+        fit, _ = spCurveFit(sigmoid, np.log10(tmp_rad), Yprofs[elID["H I"].id], p0=f0,
+                            bounds=([0, 0, -np.inf, -np.inf], [0.5, 0.5, np.inf, np.inf]))
+        tmp_Yprof = sigmoid(np.log10(tmp_rad), *fit)
+        logger.log('info', "Fitted sigmoid with parameters: A={}, B={}, x0={}, s={}".format(*fit))
+        # ensure interpolated profile is valid
+        if np.min(tmp_Yprof) < 0:
+            tmp_Yprof += np.abs(np.min(tmp_Yprof))
+        if np.max(tmp_Yprof) > 1:
+            tmp_Yprof /= np.max(tmp_Yprof)
+        Yprofs[elID["H I"].id] = tmp_Yprof
+        # recalculate electron density using smoothed Y profile
+        electrondensity = densitynH * ( (1.0-Yprofs[elID["H I"].id]) + prim_He*Yprofs[elID["He II"].id] + 2.0*prim_He*(1.0-Yprofs[elID["He I"].id]-Yprofs[elID["He II"].id]) )
     
     # Calculate the density profiles
     logger.log("info", "Calculating volume density profiles")
@@ -929,8 +957,6 @@ def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
     HaSB = (1.0/(4.0*np.pi)) * cython_fns.coldensprofile(elecprot, radius)  # photons /cm^2 / s / SR
     HaSB = HaSB * (1.98645E-8/6563.0)/4.254517E10   # ergs /cm^2 / s / arcsec^2
 
-    #print "--->", np.max(np.log10(prof_coldens[elID["H I"].id]))
-    #print "inner iter = ", inneriter
     timeB = time.time()
     logger.log("info", "Test completed in {0:f} mins".format((timeB-timeA)/60.0))
 
@@ -987,10 +1013,10 @@ def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
     #    print "Terminating after maximum N(H I) has been reached"
     #    sys.exit()
 
-    # If the hydrogen became neutral in this model, we want to rerun using finer interpolated radii around the transition
+    # If refining is enabled, signal that it should be performed if the hydrogen became neutral in this model
     # return special string to indicate this
     # but check that we're not currently refining a model!
-    if (np.max(Yprofs[elID["H I"].id]) > 0.5) and refine == False:
+    if do_ref and (np.max(Yprofs[elID["H I"].id]) > 0.5) and refine == False:
         return("needs_refine", outfname + '.npy')
     else:
         # Everything is OK
