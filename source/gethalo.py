@@ -238,7 +238,7 @@ def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
         # Get the Haardt & Madau background at the appropriate redshift
         version = options["UVB"]["spectrum"][2:4] # HM12 or HM05
         slope   = options["UVB"]["slope"]         # shape parameter alpha_UV (Crighton et al 2015, https://arxiv.org/pdf/1406.4239.pdf)
-        jzero, nuzero = radfields.HMbackground(elID,redshift=redshift, HMversion=version)
+        jzero, nuzero = radfields.HMbackground(elID,redshift=redshift, HMversion=version, alpha_UV=slope)
         jzero *= options["UVB"]["scale"]
     elif options["UVB"]["spectrum"][0:2] == "PL":
         jzero, nuzero = radfields.powerlaw(elID)
