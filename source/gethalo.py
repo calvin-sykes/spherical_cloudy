@@ -917,8 +917,9 @@ def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
         # instead interpolate from subsequent coordinates
         ratio = np.log10(tmp_rad[2]) - np.log10(tmp_rad[1])
         tmp_rad[0] = 10**(np.log10(tmp_rad[1]) - ratio)
-        # centre of sigmoid should be near the discontinuity
-        max_delta = np.log10(radius[np.argmax(np.abs(np.diff(Yprofs[elID["H I"].id])))])
+        # centre of sigmoid should be near middle of profile
+        #max_delta = np.log10(radius[np.argmax(np.abs(np.diff(Yprofs[elID["H I"].id])))])
+        max_delta = np.log10(radius[np.argmin(np.abs(Yprofs[elID["H I"].id] - 0.5))])
         f0 = (0.5, 0.5, max_delta, 0.05)
         fit, _ = spCurveFit(sigmoid, np.log10(tmp_rad), Yprofs[elID["H I"].id], p0=f0,
                             bounds=([0, 0, -np.inf, -np.inf], [0.5, 0.5, np.inf, np.inf]))
