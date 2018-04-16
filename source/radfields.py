@@ -23,7 +23,7 @@ def HMbackground_z0_sternberg(nu=None,maxvu=200.0,num=10000):
     J[w] *= 1.051E2 * nu[w]**-1.5
     return J, nu*nu0
 
-def HMbackground(elID,redshift=3.0, HMversion='12'):
+def HMbackground(elID,redshift=3.0, HMversion='12', alpha_UV=0):
     const = constants.get()
     planck  = const["planck"]
     elvolt  = const["elvolt"]
@@ -96,9 +96,9 @@ def HMbackground(elID,redshift=3.0, HMversion='12'):
     Jnut = np.append(Jnurev,Jnuadd)
     nut  = np.append(nurev,nuadd)
     argsrt = np.argsort(nut,kind='mergesort')
-    #plt.plot(np.log10(nu[::-1]),np.log10(Jnu[::-1]),'bo')
-    #plt.plot(np.log10(nut[argsrt]),np.log10(Jnut[argsrt]),'rx')
-    #plt.show()
+    plt.plot(np.log10(nu[::-1]),np.log10(Jnu[::-1]),'bo')
+    plt.plot(np.log10(nut[argsrt]),np.log10(Jnut[argsrt]),'rx')
+    plt.show()
     return Jnut[argsrt], nut[argsrt]
 
 def powerlaw(elID,):

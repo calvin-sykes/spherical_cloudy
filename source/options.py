@@ -11,7 +11,7 @@ option_types = collections.defaultdict(lambda: int) # default to integer type
 for str_opt in ['geometry:profile', 'UVB:spectrum', 'phys:temp_method', 'run:outdir', 'run:resume', 'log:level', 'log:file',
                 'grid:virialm', 'grid:redshift', 'grid:baryscale', 'grid:radscale']:
     option_types[str_opt] = str
-for flt_opt in ['geometry:scale', 'geometry:acore', 'UVB:scale', 'run:concrit', 'phys:gastemp', 'phys:metals', 'phys:bturb',
+for flt_opt in ['geometry:scale', 'geometry:acore', 'UVB:scale', 'UVB:slope', 'run:concrit', 'phys:gastemp', 'phys:metals', 'phys:bturb',
                 'phys:hescale']:
     option_types[flt_opt] = float
 for bool_opt in ['phys:ext_press', 'run:do_ref', 'run:do_smth']:
@@ -55,6 +55,7 @@ def default(save=False):
     radpar = dict({})
     radpar['spectrum'] = 'HM12'   # Set the radiation field. Options include ('HM12', 'PLm1_IPm6'...'PLm1_IPm1')
     radpar['scale'   ] = 1.0      # Constant to scale the background radiation field by
+    radpar['slope'   ] = 0.0      # HM radiation field shape parameter (Crighton et al 2015, https://arxiv.org/pdf/1406.4239.pdf)
     options['UVB'    ] = radpar
 
     # Set physical conditions
