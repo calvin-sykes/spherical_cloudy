@@ -23,7 +23,7 @@ def HMbackground_z0_sternberg(nu=None,maxvu=200.0,num=10000):
     J[w] *= 1.051E2 * nu[w]**-1.5
     return J, nu*nu0
 
-def HMbackground(elID,redshift=3.0, HMversion='12'):
+def HMbackground(elID,redshift=3.0, HMversion='12', alpha_UV=0):
     const = constants.get()
     planck  = const["planck"]
     elvolt  = const["elvolt"]
@@ -40,14 +40,6 @@ def HMbackground(elID,redshift=3.0, HMversion='12'):
     #w = np.where(waveAt < 912.0)
     Jnu = Jnut[1:]
     nu = 299792458.0/waveA
-    #plt.plot(nu[::-1][w], nu[::-1][w]*Jnu[::-1][w], 'k-')
-    #waveAt, Jnut = np.loadtxt("HM12_UVB.dat",usecols=(0,29),unpack=True)
-    #waveAtmp = waveAt[1:]*1.0E-10
-    #Jnutmp = Jnut[1:]
-    #nutmp = 299792458.0/waveAtmp
-    #plt.plot(nutmp[::-1][w], nutmp[::-1][w]*Jnutmp[::-1][w], 'r--')
-    #plt.show()
-    #plt.clf()
     # Interpolate the Haardt & Madau background around each of the ionization potentials
     #ediff = 0.00001
     ediff = 1.0E-10
@@ -96,10 +88,27 @@ def HMbackground(elID,redshift=3.0, HMversion='12'):
     Jnut = np.append(Jnurev,Jnuadd)
     nut  = np.append(nurev,nuadd)
     argsrt = np.argsort(nut,kind='mergesort')
-    #plt.plot(np.log10(nu[::-1]),np.log10(Jnu[::-1]),'bo')
-    #plt.plot(np.log10(nut[argsrt]),np.log10(Jnut[argsrt]),'rx')
-    #plt.show()
-    return Jnut[argsrt], nut[argsrt]
+
+    Jnut = Jnut[argsrt]
+    nut  =  nut[argsrt]
+    egyt = nut * planck # energies
+
+    # Shape parameter (Crighton et al 2015, https://arxiv.org/pdf/1406.4239.pdf)
+    logJ = np.log10(Jnut)
+    e0  = elID["H I"].ip * elvolt
+    e1  = 10 * elID["H I"].ip * elvolt
+    rge0 = np.logical_and(e0 <= egyt, egyt <= e1)
+    rge1 = egyt > e1
+
+    idx1 = np.searchsorted(egyt, e1)
+
+    logJ[rge0] = logJ[rge0] + alpha_UV * np.log10(egyt[rge0] / e0)
+    logJ[rge1] = logJ[rge1] + alpha_UV * np.log10(e1 / e0)
+
+    Jnut = 10**logJ
+    
+    #return Jnut[argsrt], nut[argsrt]
+    return Jnut, nut
 
 def powerlaw(elID,):
     const = constants.get()
