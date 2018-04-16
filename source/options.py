@@ -14,7 +14,7 @@ for str_opt in ['geometry:profile', 'UVB:spectrum', 'phys:temp_method', 'run:out
 for flt_opt in ['geometry:scale', 'geometry:acore', 'UVB:scale', 'run:concrit', 'phys:gastemp', 'phys:metals', 'phys:bturb',
                 'phys:hescale']:
     option_types[flt_opt] = float
-for bool_opt in ['phys:ext_press', 'run:do_ref']:
+for bool_opt in ['phys:ext_press', 'run:do_ref', 'run:do_smth']:
     option_types[bool_opt] = bool
 
 # Default settings for options
@@ -34,7 +34,8 @@ def default(save=False):
                                    #   'last': pick up from the most recent file
                                    #   'refine_last' : take the most recent file and try to refine it to get rid of the discontinuity
                                    #   number: pick up from this index in the models *already run* (negative is from the end backward)
-    runpar['do_ref' ] = False    # Whether to attempt refining
+    runpar['do_ref' ] = False      # Whether to attempt refining
+    runpar['do_smth'] = True       # Whether to smooth out discontinuities in the H I Y profile
     options['run'   ] = runpar
 
     # Set logging settings

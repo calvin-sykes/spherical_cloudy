@@ -169,6 +169,7 @@ def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
     concrit = options["run"]["concrit"]
     ncpus   = options["run"]["ncpus"  ]
     do_ref  = options["run"]["do_ref" ]
+    do_smth = options["run"]["do_smth"]
     refine  = options["run"]["refine" ]
 
     # Method used to define the radial coordinate
@@ -907,7 +908,7 @@ def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
 
     # smooth density and H I Y profile
     # only needed if Y profile becomes neutral
-    if np.max(Yprofs[elID["H I"].id]) > 0.8:
+    if do_smth and np.max(Yprofs[elID["H I"].id]) > 0.8:
         densitynH = 10**remove_discontinuity(np.log10(densitynH))
         prof_temperature = 10**remove_discontinuity(np.log10(prof_temperature))
 
