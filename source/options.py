@@ -49,6 +49,8 @@ def default(save=False):
     geompar['profile' ] = 'NFW'         # Which geometry should be used
     geompar['scale'   ] = 100           # Outer radius in units of R_vir
     geompar['acore'   ] = 0.5           # Ratio of core radius to virial radius (Cored density profile only)
+    geompar['PP_depth'] = 1             # Depth of slab in kpc (Plane parallel geometry only)
+    geompar['PP_dens' ] = -1            # log of H number density in slab in cm^-3 (Plane parallel geometry only)
     options['geometry'] = geompar
 
     # Set the radiation field
@@ -97,7 +99,7 @@ def read_options(filename):
     # Start with default settings
     options = default()
 
-    logger.init(level='debug', name='options')
+    logger.init(level='warning', name='options')
     
     parser = configparser.ConfigParser()
     config = parser.read(filename)

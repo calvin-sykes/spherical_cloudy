@@ -83,7 +83,7 @@ def mpcoldens(j, prof, radius, nummu, geom):
         return [j,coldens]
     else:
         logger.log("critical", "Geometry {0:s} is not allowed".format(geom))
-        assert(False)
+        sys.exit(1)
 
 
 def mpphion(j, jnurarr, phelxs, nuzero, planck):
@@ -114,12 +114,6 @@ def get_radius(virialr, scale, npts, method=0, **kwargs):
         len2 = len(radius)
         radius = np.append(radius, np.geomspace((1 + width_hires) * rad_neutral, virialr * scale, npts - len(radius)))
         interp_yprof = np.interp(radius, np.append(0.0, np.geomspace(virialr * 1.0E-4, virialr * scale, npts-1)),hi_yprof)
-        
-        #plt.figure()
-        #plt.scatter(np.log10(old_radius*3.24E-19), hi_yprof, s=0.1, c='b')
-        #plt.scatter(np.log10(radius*3.24E-19), interp_yprof, s=0.1, c='r')
-        #plt.scatter(np.log10(radius*3.24E-19)[len1:len2], interp_yprof[len1:len2], s=0.1, c='g')
-        #plt.show()
         # Linear scaling, but split up
         #radius = np.linspace(0.0,0.1*virialr*scale,npts/10)
         #radius = np.append(radius, np.linspace(0.1*virialr*scale,virialr*scale,7*npts/10)[1:])
@@ -159,7 +153,7 @@ def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
 
     if options is None:
         options = getoptions.default()
-        logger.log('warn', "No inputs provided to get_halo, using defaults (You probably don't want this!)")
+        logger.log('warning', "No inputs provided to get_halo, using defaults (You probably don't want this!)")
 
     # Set some numerical aspects of the simulation
     miniter = options["run"]["miniter"]
@@ -193,13 +187,18 @@ def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
     geom = options["geometry"]["profile"]
     geomscale = options["geometry"]["scale"]
 
+    # slab thickness and constant H volume density for plane parallel models
+    if geom == 'PP':
+        PP_depth = options["geometry"]["PP_depth"]
+        PP_dens  = options["geometry"]["PP_dens "]
+
     # boundary condition to use
     use_pcon = options["phys"]["ext_press"]
 
     # method to derive temperature profile
     temp_method = options["phys"]["temp_method"]
     
-     # Set up the cosmology
+    # Set up the cosmology
     cosmoVal = FlatLambdaCDM(H0=100.0*cosmopar[0] * u.km / u.s / u.Mpc, Om0=cosmopar[3])
     hubb_time = cosmoVal.age(redshift).to(u.s).value
 
@@ -228,10 +227,10 @@ def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
         prim_He = elID["He II"].abund * Hescale
     else:
         logger.log("CRITICAL", "You must include ""He I"" and ""He II"" in your model")
-        assert(False)
+        sys.exit(1)
     if "H I" not in ions:
         logger.log("CRITICAL","You must include ""H I"" in your model")
-        assert(False)
+        sys.exit(1)
 
     logger.log("debug", "Loading radiation fields")
     if options["UVB"]["spectrum"][0:2] == "HM":
@@ -286,8 +285,6 @@ def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
     elif temp_method == 'relhic':
         logger.log("info", "Using RELHIC nH-T relation")
         relhic_interp = eagle_coolfunc.load_relhic_nHT()
-    
-    close = False
 
     # if string is passed, interpret as filename for the previous run
     # this is used as an initial solution to speed up convergence
@@ -341,11 +338,11 @@ def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
             densitym  = temp_densitynH * protmss * (1.0 + 4.0*prim_He)
 
         elif geom == "PP":
-            print "Never needed this"
-            assert(False)
+            logger.log("critical", "Previous file loading for plane parallel geometries is not implemented")
+            sys.exit(1)
         else:
-            print "Not implemented yet"
-            assert(False)
+            logger.log("critical", "Unknown geometry")
+            sys.exit(1)
     else: # prevfile is None
         # Set the gas conditions
         if geom in {"NFW", "Burkert", "Cored"}:
@@ -357,13 +354,13 @@ def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
             prof_coldens = np.zeros((nions,npts,nummu))
             prof_density = 1.0E-1*np.ones((nions,npts))
         elif geom == "PP":
-            radius  = np.linspace(0.0,1000.0 * geomscale/cmtopc,npts)
-            densitynH = np.ones(npts) * (10.0**hmodel.mvir)
+            radius  = np.linspace(0.0,1000.0 * PP_depth / cmtopc,npts)
+            densitynH = np.ones(npts) * 10**PP_dens
             prof_coldens = np.zeros((nions,npts))
             prof_density = 1.0E-1*np.ones((nions,npts))
         else:
             logger.log("critical", "Unknown geometry")
-            assert False
+            sys.exit(1)
         
         prof_temperature = gastemp * np.ones(npts)
         prof_phionrate = np.zeros((nions,npts))
@@ -396,7 +393,7 @@ def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
     old_Yprofs = None
 
     extra_plots = False
-    while (not np.array_equal(tstcrit,allionpnt)) or (iteration <= miniter) or (not close):
+    while (not np.array_equal(tstcrit,allionpnt)) or (iteration <= miniter):
         iteration += 1
         logger.log("info", "Iteration number: {0:d}".format(iteration))
         for j in range(nions):
@@ -439,8 +436,6 @@ def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
                 dens_scale = barymass / (4.0 * np.pi * protmss * (1.0 + 4.0*prim_He) * rintegral)
             densitynH = dens_scale * temp_densitynH
             densitym  = densitynH * protmss * (1.0 + 4.0*prim_He)
-
-        #densitynH = 10**remove_discontinuity(np.log10(densitynH))
 
         # Update the volume density of the unionized species
         for j in range(nions):
@@ -876,11 +871,7 @@ def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
             #Yprofs = uniform_filter1d(Yprofs, 5, axis=0)
         tstcrit = ( (np.abs((old_Yprofs-Yprofs)/Yprofs)<concrit)|(Yprofs==0.0)).astype(np.int).sum(axis=1)
         if np.array_equal(tstcrit,allionpnt):
-            # Once we are close to convergence, use a more reliable cooling function
-            logger.log("info", "Getting close!! Try a more accurate cooling function")
-            close = True
             break
-            miniter += iteration
 
         # Bail if a large H I column density has already been reached
         #if np.max(np.log10(prof_coldens[elID["H I"].id])) > MAX_COL_DENS:
@@ -895,8 +886,7 @@ def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
                                                        w_maxoff[j],
                                                        old_Yprofs[j,w_maxoff[j]],
                                                        Yprofs[j,w_maxoff[j]],
-                                                       np.abs((old_Yprofs[j,w_maxoff[j]] - Yprofs[j,w_maxoff[j]])/Yprofs[j,w_maxoff[j]]))
-        )    
+                                                       np.abs((old_Yprofs[j,w_maxoff[j]] - Yprofs[j,w_maxoff[j]])/Yprofs[j,w_maxoff[j]])))    
 
         # Check if the stopping criteria were met
         if iteration > maxiter:
@@ -985,11 +975,9 @@ def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
                                  prof_coldens.T,
                                  Yprofs.T), axis=1)
     elif geom == "PP":
-        # needs fixing
-        logger.log("CRITICAL", "Fix plane parallel output!")
         assert False
-        dstring = mangle_string("{0:+3.2f}".format(options["geometry"][geom][0]))
-        rstring = mangle_string("{0:4.2f}".format(options["geometry"][geom][1])).replace(".","d")
+        dstring = mangle_string("{0:+3.2f}".format(PP_dens))
+        rstring = mangle_string("{0:4.2f}".format(PP_depth))
         if options["UVB"]["spectrum"][0:2] == "HM":
             hstring = mangle_string("HMscale{0:+3.2f}".format(np.log10(options["UVB"]["scale"])))
         elif options["UVB"]["spectrum"][0:2]=="PL":
@@ -997,7 +985,12 @@ def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
         outfname = ("output/{0:s}_density{1:s}_radius{2:s}_{3:s}_{4:d}"
                     .format(hmodel.name,dstring,rstring,hstring,npts))
         logger.log("info", "Saving file {0:s}.npy".format(outfname))
-        tmpout = np.concatenate((radius.reshape((npts,1))*cmtopc,prof_temperature.reshape((npts,1)),densitynH.reshape((npts,1)),prof_density,prof_coldens),axis=1)
+        tmpout = np.concatenate((radius.reshape((npts,1)) * cmtopc,
+                                 prof_temperature.reshape((npts,1)),
+                                 densitynH.reshape((npts,1)),
+                                 electrondensity.reshape((npts,1)),
+                                 prof_density.T,
+                                 prof_coldens.T), axis=1)
         # make sure array is C-contiguous
         tmpout = np.require(tmpout, 'C')
 
@@ -1014,8 +1007,7 @@ def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
     #    sys.exit()
 
     # If refining is enabled, signal that it should be performed if the hydrogen became neutral in this model
-    # return special string to indicate this
-    # but check that we're not currently refining a model!
+    # return special string to indicate this, but check that we're not currently refining a model!
     if do_ref and (np.max(Yprofs[elID["H I"].id]) > 0.5) and refine == False:
         return("needs_refine", outfname + '.npy')
     else:
