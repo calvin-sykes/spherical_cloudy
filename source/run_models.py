@@ -88,7 +88,12 @@ if __name__ == '__main__':
     try:
         input_file = sys.argv[1]
     except IndexError:
-        print("Input file must be provided.")
+        print("Input file must be provided")
+        sys.exit(1)
+
+    # Check input file exists
+    if not os.path.isfile(input_file):
+        print("Input file does not exist")
         sys.exit(1)
 
     opt = options.read_options(input_file)

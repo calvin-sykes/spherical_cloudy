@@ -15,7 +15,7 @@ for flt_opt in ['geometry:scale', 'geometry:acore', 'UVB:scale', 'UVB:slope', 'r
                 'phys:hescale']:
     option_types[flt_opt] = float
 for bool_opt in ['phys:ext_press', 'run:do_ref', 'run:do_smth']:
-    option_types[bool_opt] = bool
+    option_types[bool_opt] = lambda s: s.capitalize() == 'TRUE'
 
 # Default settings for options
 def default(save=False):
@@ -97,7 +97,7 @@ def read_options(filename):
     # Start with default settings
     options = default()
 
-    logger.init(level='warning', name='options')
+    logger.init(level='debug', name='options')
     
     parser = configparser.ConfigParser()
     config = parser.read(filename)
