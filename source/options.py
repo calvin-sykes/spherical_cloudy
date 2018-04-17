@@ -33,7 +33,7 @@ def default(save=False):
     runpar['resume' ] = 'none'     # Whether to resume from a previously written output file
                                    #   'last': pick up from the most recent file
                                    #   'refine_last' : take the most recent file and try to refine it to get rid of the discontinuity
-                                   #   number: pick up from this index in the models *already run* (negative is from the end backward)
+                                   #   string: find file with matching name and start from there
     runpar['do_ref' ] = False      # Whether to attempt refining
     runpar['do_smth'] = True       # Whether to smooth out discontinuities in the H I Y profile
     options['run'   ] = runpar

@@ -48,7 +48,7 @@ def init_resume(options):
             options['refine'] = True
         else:
             try:
-                file_idx = int(where)
+                file_idx = files.index(where)
             except ValueError:
                 logger.log('critical', "Couldn't understand resume command {}".format(where))
                 sys.exit(1)
