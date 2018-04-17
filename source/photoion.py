@@ -108,7 +108,8 @@ def other(ion,engy,profdens,densitynH,Yprof,electrondensity,phelxs,prof_temperat
     
     if ion == "H I":
         w_HI    = np.where(prof_HI!=0.0)
-        # Equation B3 from Jenkins et al. (2013)
+        # Section B3 from Jenkins et al. (2013)
+        # (Equation B7)
         B3_HI   = np.zeros(npts)
         trma = alpha1s_HeII(prof_temperature) * yfactor("HI", *yf_args, energy=elID["He II"].ip+1.0E-7*kB*prof_temperature/elvolt)
         trmb = alpha2p_HeII(prof_temperature) * (1.0 + yfactor("HI", *yf_args, energy=40.8*np.ones(npts)))
@@ -117,7 +118,8 @@ def other(ion,engy,profdens,densitynH,Yprof,electrondensity,phelxs,prof_temperat
         trme = 1.42*(alphaeff2s_HeII(prof_temperature) - alpha2s_HeII(prof_temperature))
         tmpHe = 1.0-Yprof[eHeI]-Yprof[eHeII]
         B3_HI[w_HI]   = ((tmpHe*densitynH*elID["He I"].abund)*electrondensity * ( trma + trmb + trmc + trmd + trme ))[w_HI]/prof_HI[w_HI]
-        # Equation B7 from Jenkins et al. (2013)
+        # Section B7 from Jenkins et al. (2013)
+        # (Equation B13)
         B7_HI   = np.zeros(npts)
         trma = alpha1s_HeI(prof_temperature) * yfactor("HI", *yf_args, energy=elID["He I"].ip+1.0E-7*kB*prof_temperature/elvolt)
         B7_HI[w_HI]   = (prof_HeII*electrondensity * ( trma + 0.96*alphaB_HeI(prof_temperature) ))[w_HI]/prof_HI[w_HI]

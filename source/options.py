@@ -3,15 +3,19 @@ import configparser
 
 import logger
 
+## NOTE: If options are added to the program b changing the dictionaries defined below,
+##       this file needs to be executed as a standalone script to update the default config file
+
 # What types each setting should be
 option_types = collections.defaultdict(lambda: int) # default to integer type
 for str_opt in ['geometry:profile', 'UVB:spectrum', 'phys:temp_method', 'run:outdir', 'run:resume', 'log:level', 'log:file',
-                'grid:virialm', 'grid:redshift', 'grid:baryscale', 'grid:radscale']:
+                'grid:virialm', 'grid:redshift', 'grid:baryscale', 'grid:radscale', 'grid:pp_depth', 'grid:pp_dens']:
     option_types[str_opt] = str
-for flt_opt in ['geometry:scale', 'geometry:acore', 'UVB:scale', 'run:concrit', 'phys:gastemp', 'phys:metals', 'phys:bturb',
+for flt_opt in ['geometry:scale', 'geometry:acore', 'UVB:scale', 'UVB:slope', 'run:concrit', 'phys:gastemp', 'phys:metals', 'phys:bturb',
                 'phys:hescale']:
     option_types[flt_opt] = float
-option_types['phys:ext_press'] = bool
+for bool_opt in ['phys:ext_press', 'run:do_ref', 'run:do_smth']:
+    option_types[bool_opt] = lambda s: s.capitalize() == 'TRUE'
 
 # Default settings for options
 def default(save=False):
@@ -29,8 +33,10 @@ def default(save=False):
     runpar['resume' ] = 'none'     # Whether to resume from a previously written output file
                                    #   'last': pick up from the most recent file
                                    #   'refine_last' : take the most recent file and try to refine it to get rid of the discontinuity
-                                   #   number: pick up from this index in the models *already run* (negative is from the end backward)
-    options['run']    = runpar
+                                   #   string: find file with matching name and start from there
+    runpar['do_ref' ] = False      # Whether to attempt refining
+    runpar['do_smth'] = True       # Whether to smooth out discontinuities in the H I Y profile
+    options['run'   ] = runpar
 
     # Set logging settings
     logpar = dict({})
@@ -49,6 +55,7 @@ def default(save=False):
     radpar = dict({})
     radpar['spectrum'] = 'HM12'   # Set the radiation field. Options include ('HM12', 'PLm1_IPm6'...'PLm1_IPm1')
     radpar['scale'   ] = 1.0      # Constant to scale the background radiation field by
+    radpar['slope'   ] = 0.0      # HM radiation field shape parameter (Crighton et al 2015, https://arxiv.org/pdf/1406.4239.pdf)
     options['UVB'    ] = radpar
 
     # Set physical conditions
@@ -73,6 +80,8 @@ def default(save=False):
     gridpar['redshift' ] = "np.zeros(1)" # redshifts
     gridpar['baryscale'] = "np.ones(1)" # scaling of universal baryon fraction
     gridpar['radscale' ] = "np.ones(1)" # scaling of UVB intensity
+    gridpar['pp_depth' ] = "np.ones(1)" # Depth of slab in kpc (Plane parallel geometry only)
+    gridpar['pp_dens'  ] = "np.full(1, -1.0)" # log of H number density in slab in cm^-3 (Plane parallel geometry only)
     options['grid'     ] = gridpar
 
     if save:
@@ -107,7 +116,7 @@ def read_options(filename):
                     logger.log('debug', "New setting for option {}:{} is {}"
                                .format(section, key, parser[section][key]), 'options')
                 else:
-                    logger.log('warning', "Input file option {:s} is invalid".format(key), 'options')
+                    logger.log('warning', "Input file option {}:{} is invalid".format(section, key), 'options')
         else:
             logger.log('warning', "Input file section {:s} is invalid".format(section), 'options')
 
