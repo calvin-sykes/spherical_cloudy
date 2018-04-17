@@ -81,7 +81,7 @@ def init_grid(options):
         for param, stmnt in options['grid'].iteritems():
             gridparams[param] = eval(stmnt)
     except:
-        logger.log('critical', "Failed to eval grid specification.")
+        logger.log('critical', "Failed to eval grid specification {}".format(stmnt))
         logger.log('critical', traceback.format_exc())
         sys.exit(1)
     return gridparams
@@ -168,8 +168,8 @@ def run_grid(opt, cosmopar, ions, dryrun=False):
 def run_grid_PP(opt, cosmopar, ions, dryrun=False):
     # Get arrays defining the grid of models to run
     gridparams = init_grid(opt)
-    density  = gridparams['PP_dens']
-    depth    = gridparams['PP_depth']
+    density  = gridparams['pp_dens']
+    depth    = gridparams['pp_depth']
     redshift = gridparams['redshift']
 
     numdens, numdepth, numreds = map(len, [density, depth, redshift])
@@ -184,18 +184,25 @@ def run_grid_PP(opt, cosmopar, ions, dryrun=False):
                 models.append((i, j, k))
     models.reverse()
 
+    # Get some constants needed to define the halo model
+    const  = constants.get()
+    cmtopc = const['cmtopc']
+
     while models:
         i, j, k = models.pop()
         logger.log('info', "###########################")
         logger.log('info', "###########################")
-        logger.log('info', " slab depth {2:.2f}    ({0:d}/{1:d})".format(j+1,numdepth, depth[j]))
-        logger.log('info', " H density 10**{2:.2f} ({0:d}/{1:d})".format(i+1,numdens, density[i]))
+        logger.log('info', " slab depth {2:.1f} kpc ({0:d}/{1:d})".format(j+1,numdepth, depth[j]))
+        logger.log('info', " H density 10**{2:.1f} ({0:d}/{1:d})".format(i+1,numdens, density[i]))
         logger.log('info', " redshift {2:.2f}      ({0:d}/{1:d})".format(k+1,numreds, redshift[k]))
         logger.log('info', "###########################")
         logger.log('info', "###########################")
+        model = halomodel.make_halo(opt['geometry']['profile'],
+                                    1000 * depth[j] / cmtopc,
+                                    10.0**density[i])
         # Let's go!
         if not dryrun:
-            ok, res = gethalo.get_halo(halomodel.PPHalo(), redshift[k], cosmopar, ions, prevfile=None, options=opt)
+            ok, res = gethalo.get_halo(model, redshift[k], cosmopar, ions, prevfile=None, options=opt)
             if ok != True:
                 # something went wrong with the model
                 logger.log('error', res)
@@ -252,7 +259,7 @@ if __name__ == '__main__':
         if opt['geometry']['profile'] in {'NFW', 'Burkert', 'Cored'}:
             run_grid(opt, cosmopar, ions)
         elif opt['geometry']['profile'] == 'PP':
-            run_grid_PP(opt)
+            run_grid_PP(opt, cosmopar, ions)
     except Exception:
         logger.log('critical', traceback.format_exc())
         sys.exit(1)

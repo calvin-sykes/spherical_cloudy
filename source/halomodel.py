@@ -17,7 +17,7 @@ class HaloModel:
 class NFWHalo(HaloModel):
     def __init__(self, virial_mass, baryon_frac, rho_crit, conc, **kwargs):
         HaloModel.__init__(self, virial_mass, baryon_frac, rho_crit, conc)
-        self.name = "NFW"
+        self.name = 'NFW'
 
     def fm(self, x):
         return 3.0 * (np.log(1.0 + x) - x / (1.0 + x))
@@ -25,7 +25,7 @@ class NFWHalo(HaloModel):
 class BurkertHalo(HaloModel):
     def __init__(self, virial_mass, baryon_frac, rho_crit, conc, **kwargs):
         HaloModel.__init__(self, virial_mass, baryon_frac, rho_crit, conc)
-        self.name = "Burkert"
+        self.name = 'Burkert'
 
     def fm(self, x):
         return 1.5 * (0.5 * np.log(1.0 + x**2.0) + np.log(1.0+x) - np.arctan(x))
@@ -35,7 +35,7 @@ class CoredHalo(HaloModel):
     def __init__(self, virial_mass, baryon_frac, rho_crit, conc, acore):
         HaloModel.__init__(self, virial_mass, baryon_frac, rho_crit, conc)
         self.acore = acore
-        self.name = "Cored"
+        self.name = 'Cored'
 
     def fm(self, x):
         return 3.0 * (x / ((self.acore-1.0) * (1.0 + x))
@@ -43,14 +43,16 @@ class CoredHalo(HaloModel):
                          + (1.0 - 2.0*self.acore) * np.log(1.0 + x)) / (1.0 - self.acore)**2.0 )
 
 
-# dummy class to use as placeholder in plane parallel models
 class PPHalo(HaloModel):
-    pass
+    def __init__(self, depth, dens):
+        self.depth = depth
+        self.density = dens
+        self.name = 'PP'
 
-
-func_map = { 'NFW' : NFWHalo,
-             'Burkert' : BurkertHalo,
-             'Cored' : CoredHalo}
+func_map = {'NFW'     : NFWHalo,
+            'Burkert' : BurkertHalo,
+            'Cored'   : CoredHalo,
+            'PP'      : PPHalo }
 
 def make_halo(name, *args, **kwargs):
     try:

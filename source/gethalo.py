@@ -189,8 +189,8 @@ def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
 
     # slab thickness and constant H volume density for plane parallel models
     if geom == 'PP':
-        PP_depth = options["geometry"]["PP_depth"]
-        PP_dens  = options["geometry"]["PP_dens "]
+        PP_depth = hmodel.depth
+        PP_dens  = hmodel.density
 
     # boundary condition to use
     use_pcon = options["phys"]["ext_press"]
@@ -354,8 +354,8 @@ def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
             prof_coldens = np.zeros((nions,npts,nummu))
             prof_density = 1.0E-1*np.ones((nions,npts))
         elif geom == "PP":
-            radius  = np.linspace(0.0,1000.0 * PP_depth / cmtopc,npts)
-            densitynH = np.ones(npts) * 10**PP_dens
+            radius  = np.linspace(0.0, PP_depth, npts)
+            densitynH = np.ones(npts) * PP_dens
             prof_coldens = np.zeros((nions,npts))
             prof_density = 1.0E-1*np.ones((nions,npts))
         else:
@@ -938,7 +938,6 @@ def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
         elif geom == "PP":
             coldens = cython_fns.calc_coldensPP(prof_density[j], radius)
             prof_coldens[j] = coldens.copy()
-            print ions[j], np.log10(prof_coldens[j,0]), np.max(np.log10(prof_coldens[j,:]))
 
     logger.log("info", "Calculating Ha surface brightness profile")
     Harecomb = recomb.Ha_recomb(prof_temperature)
@@ -962,7 +961,7 @@ def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
             hstring = mangle_string("HMscale{0:+3.2f}".format(np.log10(options["UVB"]["scale"])))
         elif options["UVB"]["spectrum"][0:2]=="PL":
             hstring = options["UVB"]["spectrum"]
-        outfname = out_dir + ("/{0:s}_mass{1:s}_redshift{2:s}_baryscl{3:s}_{4:s}_{5:d}-{6:d}"
+        outfname = out_dir + ("{0:s}_mass{1:s}_redshift{2:s}_baryscl{3:s}_{4:s}_{5:d}-{6:d}"
                               .format(geom,mstring,rstring,bstring,hstring,npts,nummu))
         logger.log("info", "Saving file {0:s}.npy".format(outfname))
         tmpout = np.concatenate((radius.reshape((npts,1)) * cmtopc,
@@ -975,15 +974,14 @@ def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
                                  prof_coldens.T,
                                  Yprofs.T), axis=1)
     elif geom == "PP":
-        assert False
         dstring = mangle_string("{0:+3.2f}".format(PP_dens))
-        rstring = mangle_string("{0:4.2f}".format(PP_depth))
+        rstring = mangle_string("{0:4.2f}".format(PP_depth * cmtopc / 1000))
         if options["UVB"]["spectrum"][0:2] == "HM":
             hstring = mangle_string("HMscale{0:+3.2f}".format(np.log10(options["UVB"]["scale"])))
         elif options["UVB"]["spectrum"][0:2]=="PL":
             hstring = options["UVB"]["spectrum"]
-        outfname = ("output/{0:s}_density{1:s}_radius{2:s}_{3:s}_{4:d}"
-                    .format(hmodel.name,dstring,rstring,hstring,npts))
+        outfname = out_dir + ("{0:s}_density{1:s}_radius{2:s}_{3:s}_{4:d}"
+                    .format(geom,dstring,rstring,hstring,npts))
         logger.log("info", "Saving file {0:s}.npy".format(outfname))
         tmpout = np.concatenate((radius.reshape((npts,1)) * cmtopc,
                                  prof_temperature.reshape((npts,1)),
@@ -992,7 +990,7 @@ def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
                                  prof_density.T,
                                  prof_coldens.T), axis=1)
         # make sure array is C-contiguous
-        tmpout = np.require(tmpout, 'C')
+        #tmpout = np.require(tmpout, 'C')
 
     np.save(outfname, tmpout)
     

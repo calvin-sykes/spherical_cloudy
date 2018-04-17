@@ -9,7 +9,7 @@ import logger
 # What types each setting should be
 option_types = collections.defaultdict(lambda: int) # default to integer type
 for str_opt in ['geometry:profile', 'UVB:spectrum', 'phys:temp_method', 'run:outdir', 'run:resume', 'log:level', 'log:file',
-                'grid:virialm', 'grid:redshift', 'grid:baryscale', 'grid:radscale']:
+                'grid:virialm', 'grid:redshift', 'grid:baryscale', 'grid:radscale', 'grid:pp_depth', 'grid:pp_dens']:
     option_types[str_opt] = str
 for flt_opt in ['geometry:scale', 'geometry:acore', 'UVB:scale', 'UVB:slope', 'run:concrit', 'phys:gastemp', 'phys:metals', 'phys:bturb',
                 'phys:hescale']:
@@ -49,8 +49,6 @@ def default(save=False):
     geompar['profile' ] = 'NFW'         # Which geometry should be used
     geompar['scale'   ] = 100           # Outer radius in units of R_vir
     geompar['acore'   ] = 0.5           # Ratio of core radius to virial radius (Cored density profile only)
-    geompar['PP_depth'] = 1             # Depth of slab in kpc (Plane parallel geometry only)
-    geompar['PP_dens' ] = -1            # log of H number density in slab in cm^-3 (Plane parallel geometry only)
     options['geometry'] = geompar
 
     # Set the radiation field
@@ -82,6 +80,8 @@ def default(save=False):
     gridpar['redshift' ] = "np.zeros(1)" # redshifts
     gridpar['baryscale'] = "np.ones(1)" # scaling of universal baryon fraction
     gridpar['radscale' ] = "np.ones(1)" # scaling of UVB intensity
+    gridpar['pp_depth' ] = "np.ones(1)" # Depth of slab in kpc (Plane parallel geometry only)
+    gridpar['pp_dens'  ] = "np.full(1, -1.0)" # log of H number density in slab in cm^-3 (Plane parallel geometry only)
     options['grid'     ] = gridpar
 
     if save:
@@ -116,7 +116,7 @@ def read_options(filename):
                     logger.log('debug', "New setting for option {}:{} is {}"
                                .format(section, key, parser[section][key]), 'options')
                 else:
-                    logger.log('warning', "Input file option {:s} is invalid".format(key), 'options')
+                    logger.log('warning', "Input file option {}:{} is invalid".format(section, key), 'options')
         else:
             logger.log('warning', "Input file section {:s} is invalid".format(section), 'options')
 
