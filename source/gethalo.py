@@ -974,7 +974,7 @@ def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
                                  prof_coldens.T,
                                  Yprofs.T), axis=1)
     elif geom == "PP":
-        dstring = mangle_string("{0:+3.2f}".format(PP_dens))
+        dstring = mangle_string("{0:+3.2f}".format(np.log10(PP_dens)))
         rstring = mangle_string("{0:4.2f}".format(PP_depth * cmtopc / 1000))
         if options["UVB"]["spectrum"][0:2] == "HM":
             hstring = mangle_string("HMscale{0:+3.2f}".format(np.log10(options["UVB"]["scale"])))
@@ -987,8 +987,10 @@ def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
                                  prof_temperature.reshape((npts,1)),
                                  densitynH.reshape((npts,1)),
                                  electrondensity.reshape((npts,1)),
+                                 HaSB.reshape((npts,1)),
                                  prof_density.T,
-                                 prof_coldens.T), axis=1)
+                                 prof_coldens.T,
+                                 Yprofs.T), axis=1)
         # make sure array is C-contiguous
         #tmpout = np.require(tmpout, 'C')
 
