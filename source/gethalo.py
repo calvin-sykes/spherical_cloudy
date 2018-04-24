@@ -139,8 +139,12 @@ def mangle_string(str):
 def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
              ions=["H I", "He I", "He II"], prevfile=None, options=None):
     """
+    hmodel    : The halo model which defines the geometry
+    redshift  : The redshift to evaluate the UVB at
     cosmopar  : Set the cosmology of the simulation (hubble constant/100 km/s/Mpc, Omega_B, Omega_L, Omega_M)
     ions      : A list of ions to consider
+    prevfile  : A filename for a previous run's output to load as an initial solution
+    options   : The options dictionary which contains all the parameters/settings for the model
     """
 
     bturb   = options['phys']['bturb'  ]
@@ -264,11 +268,13 @@ def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
     drecombelems = drecombrate.keys()
 
     logger.log("debug",  "Loading collisional ionization rate coefficients")
-    usecolion = "Dere2007"
+    usecolion = "Chianti"
     if usecolion == "Dere2007":
         colionrate = colioniz.load_data(elID, rates="Dere2007")
     elif usecolion == "Voronov1997":
         colionrate = colioniz.load_data(elID, rates="Voronov1997")
+    elif usecolion == "Chianti":
+        colionrate, coliontemp = colioniz.load_data(elID, rates="Chianti")
     else:
         logger.log("error", "Cannot load collisional ionization rates")
 
@@ -496,6 +502,8 @@ def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
                 ratev = colioniz.rate_function_Dere2007(1.0E-7*prof_temperature*kB/elvolt, colionrate[ions[j]])
             elif usecolion == "Voronov1997":
                 ratev = colioniz.rate_function_arr(1.0E-7*prof_temperature*kB/elvolt, colionrate[ions[j]])
+            elif usecolion == "Chianti":
+                ratev = colioniz.rate_function_Chianti(1.0E-7*prof_temperature*kB/elvolt, colionrate[ions[j]], coliontemp)
             prof_colion[j] = ratev.copy()
 
         # the secondary photoelectron collisional ionization rates (probably not important for metals -- Section II, Shull & van Steenberg (1985))
@@ -600,24 +608,11 @@ def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
         tmp_Yprofs = Yprofs.copy()
         inneriter = 0
 
-        if iteration > 42:
+        if False and iteration > 0:
             extra_plots = True
-
-        #plt.figure()
-        #plt.plot(Yprofs[0])
-        #plt.show()
-        #
-        #plt.figure()
-        #plt.plot(np.log10(prof_rates[elID["H I"].id]))
-        #plt.show()
 
         ## BEGIN INNER ITERATION
         while True:
-            if False and extra_plots:
-                print('RATES')
-                plt.figure()
-                plt.plot(np.log10(prof_rates[elID["H I"].id]))
-                plt.show()
 
             # Calculate the Yprofs
             Yprofs = misc.calc_yprofs(ions,prof_rates,elID)
@@ -674,6 +669,8 @@ def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
                     ratev = colioniz.rate_function_Dere2007(1.0E-7*prof_temperature*kB/elvolt, colionrate[ions[j]])
                 elif usecolion == "Voronov1997":
                     ratev = colioniz.rate_function_arr(1.0E-7*prof_temperature*kB/elvolt, colionrate[ions[j]])
+                elif usecolion == "Chianti":
+                    ratev = colioniz.rate_function_Chianti(1.0E-7*prof_temperature*kB/elvolt, colionrate[ions[j]], coliontemp)
                 prof_colion[j] = ratev.copy()
 
             # Other
@@ -704,27 +701,38 @@ def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
         logger.log("info", "Inner iteration cycled {0:d} times".format(inneriter))
         ## END INNER ITERATION
 
-        if False and extra_plots:
+        if False and iteration > 30:
+            print("COLION")
+            plt.figure()
+            plt.plot(np.log10(radius*cmtopc),np.log10(prof_colion[0]))
+            plt.show()
             print('GAMMA')
+
+            hitemp = (prof_temperature > 1e4)
+            first = np.nonzero(hitemp)[0][0]
+            last = len(hitemp) - np.nonzero(hitemp[::-1])[0][0]
+            
             plt.figure()
             plt.plot(np.log10(radius * cmtopc), np.log10(prof_phionrate[0]), label='phion')
             plt.plot(np.log10(radius * cmtopc), np.log10(prof_scdryrate[0]), label='scdry')
             plt.plot(np.log10(radius * cmtopc), np.log10(prof_other[0]), label='other')
-            plt.plot(np.log10(radius * cmtopc), np.log10(prof_colion[0]), label='colion')
+            plt.plot(np.log10(radius * cmtopc), np.log10(prof_colion[0]), label='colion') 
+            plt.axvline(np.log10(radius * cmtopc)[first], c='k')
+            plt.axvline(np.log10(radius * cmtopc)[last], c='k')
             plt.plot(np.log10(radius * cmtopc), np.log10(prof_gamma[0]), label = 'total')
             plt.legend()
             plt.show()
             #
-            #print('ALPHA')
-            #plt.figure()
-            #plt.plot(np.log10(radius * cmtopc), np.log10(prof_alpha[0]))
-            #plt.show()
+            print('TEMPERATURE')
+            plt.figure()
+            plt.plot(np.log10(radius * cmtopc), np.log10(prof_temperature))
+            plt.show()
             #
-            #print('YPROFS')
-            #plt.figure()
-            ##plt.plot(np.log10(radius * cmtopc), np.log10(prof_rates[0]/np.max(prof_rates[0])))
-            #plt.plot(np.log10(radius * cmtopc), Yprofs[0])
-            #plt.show()        
+            print('YPROFS')
+            plt.figure()
+            #plt.plot(np.log10(radius * cmtopc), np.log10(prof_rates[0]/np.max(prof_rates[0])))
+            plt.plot(np.log10(radius * cmtopc), Yprofs[0])
+            plt.show()        
 
         # If the tabulated Eagle cooling function is used, there's no need to calculate any rates
         if temp_method not in {'eagle', 'relhic'}:
@@ -830,10 +838,12 @@ def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
 
             # plot commands...
             live_ax.set_xlabel('log(Radius (pc))')
-            #live_ax.set_ylabel(r'log($n_H$)')
-            live_ax.plot(np.log10(radius * cmtopc), Yprofs[elID["H I"].id])
-            live_ax.plot(np.log10(radius * cmtopc), Yprofs[elID["He I"].id])
-            live_ax.plot(np.log10(radius * cmtopc), Yprofs[elID["He II"].id])
+            live_ax.set_ylabel(r'log($n_H$)')
+            live_ax.plot(np.log10(radius * cmtopc), np.log10(densitynH))
+            live_ax.plot(np.log10(radius * cmtopc), np.log10(dens_scale * temp_densitynH))
+            #live_ax.plot(np.log10(radius * cmtopc), Yprofs[elID["H I"].id])
+            #live_ax.plot(np.log10(radius * cmtopc), Yprofs[elID["He I"].id])
+            #live_ax.plot(np.log10(radius * cmtopc), Yprofs[elID["He II"].id])
             #live_ax.plot(np.log10(radius * cmtopc), masspp)
             #live_ax.plot(np.log10(densitynH), prof_temperature)
 
