@@ -46,7 +46,7 @@ def init_resume(options, dims):
         os.chdir(wd)
         where = options['run']['resume']
         if where == 'last':
-            file_idx = len(files) - 1
+            file_idx = len(files) - 2
         elif where == 'refine_last':
             file_idx = len(files) - 1
             options['refine'] = True
