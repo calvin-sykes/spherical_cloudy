@@ -4,7 +4,7 @@ http://www.pa.uky.edu/~verner/col.html
 """
 
 import numpy as np
-#from matplotlib import pyplot as plt
+from matplotlib import pyplot as plt
 from scipy import interpolate
 import scipy.special as specialfunc
 import misc
@@ -55,12 +55,18 @@ def rate_function_Dere2007(Te, arr):
     """
     temperature is in eV
     """
-    tck = interpolate.splrep(arr[2], arr[3], s=0)
-    redt = Te/arr[0]
+    tck = interpolate.splrep(arr[2], arr[3], s=1)
+    redt = Te/arr[0] # ratio of temperature in eV to IP 
     xval = 1.0 - np.log(2.0)/np.log(2.0 + redt)
     rho = interpolate.splev(xval, tck, der=0, ext=1)
     rateval = (redt**-0.5) * (arr[0]**-1.5) * (1.0E-6*rho) * specialfunc.exp1(1.0/redt)
     return rateval
+
+def rate_function_Chianti(Te, arr, arrTe):
+    """
+    temperature is in eV
+    """
+    return np.interp(Te, arrTe, arr)
 
 def rate(ion,electemp,elidx):
     #print "Have you checked that the electron temperature is in eV?"
@@ -136,7 +142,38 @@ def load_data(elidx, rates="Voronov1997"):
             datadict[elion] = [ip, mintemp, xspl.copy(), yspl.copy()]
             if elion == "H I":
                 # Manually add in D I
-                datadict["D I"] = [elidx["D I"][2], mintemp, xspl.copy(), yspl.copy()]
+                datadict["D I"] = [elidx["D I"].ip, mintemp, xspl.copy(), yspl.copy()]
+    elif rates=="Chianti":
+        with open("data/colioniz_chianti.dat") as f:
+            lines = f.readlines()
+            for i, line in enumerate(lines):
+                # header has ion names
+                if i == 0:
+                    ion_labels = line.lstrip('#').split()
+                    labels = []
+                    for label in ion_labels:
+                        if label == 'temp': continue # first column is temperature, ignore
+                        # convert format of ion labels
+                        # saved as e.g. 'he_2'; want 'He II'
+                        lsplit = label.split('_')
+                        elem = lsplit[0].capitalize()
+                        ionstage = misc.numtorn(int(lsplit[1]))
+                        elion = elem + ' ' + ionstage
+                        if elion not in ekeys: continue # Don't include unnecessary data
+                        # keep track of order ions are in
+                        labels.append(elion)
+                        datadict[elion] = np.zeros(len(lines) - 1)
+                    temp = np.zeros(len(lines) - 1)
+                else:
+                    lsplit = line.split()
+                    isubone = i - 1
+                    temp[isubone] = float(lsplit[0])
+                    for colidx, elion in enumerate(labels):
+                        datadict[elion][isubone] = float(lsplit[colidx + 1]) # + 1 to skip temperature
+        # manually add D I
+        datadict["D I"] = datadict["H I"].copy()
+        # for this method also need to return temperature grid
+        return datadict, temp
     else:
         print "Error: Collisional Ionization rates not found"
         sys.exit()
