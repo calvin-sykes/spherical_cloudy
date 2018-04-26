@@ -1,9 +1,12 @@
-import numpy as np
-#import matplotlib.pyplot as plt
-
 # ----------------------------------------------------------------- #
 # If CHIANTI and ChiantiPy are not installed this script won't work #
 # ----------------------------------------------------------------- #
+#
+# Fetches collisional ionisation data from the CHIANTI database using
+# ChiantiPy and saves the rates to a data file 'colioniz_chianti.dat'
+
+import numpy as np
+#import matplotlib.pyplot as plt
 import ChiantiPy.core as ch
 
 if __name__ == '__main__':
@@ -32,7 +35,7 @@ if __name__ == '__main__':
         ion.ionizRate() # populate field in ChiantiPy object with the rates
         out_data[:, i+1] = ion.IonizRate['rate'] # extract rates data
 
-    np.savetxt('data/colioniz_chianti.dat', out_data, header='temp ' + ' '.join(ion_names))
+    np.savetxt('colioniz_chianti.dat', out_data, header='temp ' + ' '.join(ion_names))
     
     #plt.figure()
     #plt.plot(np.log10(out_data[:,0]), np.log10(out_data[:,1:]))
