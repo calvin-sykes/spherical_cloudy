@@ -336,9 +336,7 @@ def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
             temp_densitynH = np.interp(radius, old_radius, tdata[:,2])
             for j in range(nions):
                 prof_density[j] = np.interp(radius, old_radius, tdata[:,arridx["voldens"][ions[j]]])
-                #prof_density[j] = 10**remove_discontinuity(np.log10(prof_density[j]))
                 Yprofs[j] = prof_density[j] / (temp_densitynH * elID[ions[j]].abund)
-                #Yprofs[j] = remove_discontinuity(Yprofs[j])
 
             prof_phionrate = np.zeros((nions,npts))
             densitym  = temp_densitynH * protmss * (1.0 + 4.0*prim_He)
@@ -505,6 +503,29 @@ def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
             elif usecolion == "Chianti":
                 ratev = colioniz.rate_function_Chianti(1.0E-7*prof_temperature*kB/elvolt, colionrate[ions[j]], coliontemp)
             prof_colion[j] = ratev.copy()
+
+
+        if False:
+            crate_Dere = colioniz.load_data(elID, rates="Dere2007")
+            #crate_Voronov = colioniz.load_data(elID, rates="Voronov1997")
+            crate_Chianti, coliontemp = colioniz.load_data(elID, rates="Chianti")
+
+            plt.figure()
+            plt.xlabel(r'$\log_{10}(\rm{Radius} (pc))$')
+            plt.ylabel(r'$\log_{10}(\rm{Rate})$')
+            #plt.plot(np.log10(radius * cmtopc), np.log10(colioniz.rate_function_arr(1.0E-7*prof_temperature*kB/elvolt, crate_Voronov["H I"])), label='Voronov97')
+            plt.plot(np.log10(radius * cmtopc), np.log10(colioniz.rate_function_Chianti(1.0E-7*prof_temperature*kB/elvolt, crate_Chianti["H I"], coliontemp)), '-', label='Chianti')
+            plt.plot(np.log10(radius * cmtopc), np.log10(colioniz.rate_function_Dere2007(1.0E-7*prof_temperature*kB/elvolt, crate_Dere["H I"])), '--', label='Dere07')
+            plt.legend()
+            plt.show()
+
+            plt.figure()
+            plt.xlabel(r'$\log_{10}(\rm{Temperature} (eV))$')
+            plt.ylabel(r'$\log_{10}(\rm{Rate})$')
+            plt.plot(np.log10(coliontemp), np.log10(colioniz.rate_function_Chianti(coliontemp, crate_Chianti["H I"], coliontemp)), '-', label='Chianti')
+            plt.plot(np.log10(coliontemp), np.log10(colioniz.rate_function_Dere2007(coliontemp, crate_Dere["H I"])), '--', label='Dere2007')
+            plt.legend()
+            plt.show()
 
         # the secondary photoelectron collisional ionization rates (probably not important for metals -- Section II, Shull & van Steenberg (1985))
         logger.log("debug", "Integrate over frequency to get secondary photoelectron ionization")
@@ -701,7 +722,7 @@ def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
         logger.log("info", "Inner iteration cycled {0:d} times".format(inneriter))
         ## END INNER ITERATION
 
-        if False and iteration > 30:
+        if False: # and iteration > 30:
             print("COLION")
             plt.figure()
             plt.plot(np.log10(radius*cmtopc),np.log10(prof_colion[0]))

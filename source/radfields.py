@@ -31,7 +31,7 @@ def HMbackground(elID,redshift=3.0, HMversion='12', alpha_UV=0):
         usecols = tuple(range(60))
     elif HMversion == '05':
         usecols = tuple(range(50))
-    data = np.loadtxt("HM{:s}_UVB.dat".format(HMversion), usecols=usecols)
+    data = np.loadtxt("data/radfields/HM{:s}_UVB.dat".format(HMversion), usecols=usecols)
     rdshlist = data[0,:]
     amin = np.argmin(np.abs(rdshlist-redshift))
     logger.log("info", "Using HM{1:s} background at z={0:f}".format(rdshlist[amin], HMversion))
@@ -115,7 +115,7 @@ def powerlaw(elID,):
     planck  = const["planck"]
     elvolt  = const["elvolt"]
     try:
-        nurevt, Jnurevt = np.loadtxt(options["radfield"]+".radfield",unpack=True)
+        nurevt, Jnurevt = np.loadtxt("data/radfields/" + options["radfield"]+".radfield",unpack=True)
         # Now load the HM spectrum to get the same frequency scale
         data = np.loadtxt("HM12_UVB.dat")
         rdshlist = data[0,:]
