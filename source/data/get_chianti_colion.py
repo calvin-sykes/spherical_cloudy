@@ -32,6 +32,7 @@ if __name__ == '__main__':
     out_data[:,0] = eV_temp
 
     for i, ion in enumerate(ion_objs):
+        print('Getting ' + ion_names[i])
         ion.ionizRate() # populate field in ChiantiPy object with the rates
         out_data[:, i+1] = ion.IonizRate['rate'] # extract rates data
 

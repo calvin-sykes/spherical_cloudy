@@ -91,11 +91,6 @@ def rate_function_arr_break(temp, arr):
     rate[wz] = 0.0
     return rate
 
-
-
-
-
-
 def rate_function(temp, a, b, c, d, tmin, tmax):
     rate = 1.0E-9 * a * ((temp/1.0E4)**b) * (1.0 + c*np.exp(d*temp/1.0E4))
     wz = np.where(rate<0.0)

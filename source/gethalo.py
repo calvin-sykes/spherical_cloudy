@@ -248,6 +248,15 @@ def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
     else:
         logger.log("CRITICAL", "The radiation field {0:s} is not implemented yet".format(options["radfield"]))
         sys.exit()
+
+    #Jstern, nustern = radfields.HMbackground_z0_sternberg()  
+    #plt.figure()
+    #plt.xlim(0,10)
+    #plt.plot(( nuzero/3.287E15), np.log10( nuzero * jzero ))
+    #plt.plot((nustern/3.287E15), np.log10(nustern * Jstern))
+    #plt.axvline(1)
+    #plt.axvline(4)
+    #plt.show()
     
     # convert to an energy
     engy = planck * nuzero / elvolt
