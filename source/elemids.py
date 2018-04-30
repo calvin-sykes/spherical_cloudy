@@ -1,5 +1,6 @@
 import misc
 from collections import namedtuple
+import os
 
 ElemID = namedtuple('ElemID', ['id', 'abund', 'ip'])
 
@@ -29,7 +30,7 @@ def ionization_potential(ion):
     Ionization energies of each element/ion from:
     http://physics.nist.gov/PhysRefData/ASD/ionEnergy.html
     """
-    data = open("data/atomic_ip.dat",'r').readlines()
+    data = open(os.path.join(os.path.dirname(__file__), "data/atomic_ip.dat"),'r').readlines()
     ip = None
     for i in range(len(data)):
         if data[i][0] == "#": continue

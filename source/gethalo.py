@@ -1015,7 +1015,7 @@ def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
                                  Yprofs.T), axis=1)
     elif geom == "PP":
         dstring = mangle_string("{0:+3.2f}".format(np.log10(PP_dens)))
-        rstring = mangle_string("{0:4.2f}".format(PP_depth * cmtopc / 1000))
+        rstring = mangle_string("{0:4.2f}".format(np.log10(PP_depth * cmtopc / 1000)))
         if options["UVB"]["spectrum"][0:2] == "HM":
             hstring = mangle_string("HMscale{0:+3.2f}".format(np.log10(options["UVB"]["scale"])))
         elif options["UVB"]["spectrum"][0:2]=="PL":

@@ -3,6 +3,7 @@ import cython_fns
 from matplotlib import pyplot as plt
 import constants
 import logger
+import os
 
 def HMbackground_z0_sternberg(nu=None,maxvu=200.0,num=10000):
     Jnu0 = 2.0E-23
@@ -31,7 +32,7 @@ def HMbackground(elID,redshift=3.0, HMversion='12', alpha_UV=0):
         usecols = tuple(range(60))
     elif HMversion == '05':
         usecols = tuple(range(50))
-    data = np.loadtxt("data/radfields/HM{:s}_UVB.dat".format(HMversion), usecols=usecols)
+    data = np.loadtxt(os.path.join(os.path.dirname(__file__), "data/radfields/HM{:s}_UVB.dat").format(HMversion), usecols=usecols)
     rdshlist = data[0,:]
     amin = np.argmin(np.abs(rdshlist-redshift))
     logger.log("info", "Using HM{1:s} background at z={0:f}".format(rdshlist[amin], HMversion))
