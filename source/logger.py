@@ -1,13 +1,13 @@
 import logging
 
 #These are the sequences need to get colored ouput
-RESET_SEQ = "\033[0m"
-COLOR_SEQ = "\033[0;%dm"
-BOLD_SEQ = "\033[1m"
+_RESET_SEQ = "\033[0m"
+_COLOR_SEQ = "\033[0;%dm"
+_BOLD_SEQ = "\033[1m"
 
 def formatter_message(message, use_color = True):
     if use_color:
-        message = message.replace("$RESET", RESET_SEQ).replace("$BOLD", BOLD_SEQ)
+        message = message.replace("$RESET", _RESET_SEQ).replace("$BOLD", _BOLD_SEQ)
     else:
         message = message.replace("$RESET", "").replace("$BOLD", "")
     return message
@@ -40,7 +40,7 @@ class ColoredFormatter(logging.Formatter):
     def format(self, record):
         levelname = record.levelname
         if self.use_color and levelname in self.COLORS:
-            levelname_color = COLOR_SEQ % (30 + self.COLORS[levelname]) + levelname + RESET_SEQ
+            levelname_color = _COLOR_SEQ % (30 + self.COLORS[levelname]) + levelname + _RESET_SEQ
             record.levelname = levelname_color
         return logging.Formatter.format(self, record)
 
@@ -66,6 +66,17 @@ def init(level='WARNING', filename=None, name='main'):
         # Check what level of messages we are interested in
         numeric_level = to_numeric_level(level)
         logger.setLevel(numeric_level)
+
+def disable(name='main'):
+    logging.getLogger(name).disabled = True
+    return
+
+def enable(name='main'):
+    logging.getLogger(name).disabled = False
+    return
+
+def is_enabled(name='main'):
+    return not logging.getLogger(name).disabled
 
 def log(level, message, name='main'):
     logger = logging.getLogger(name)

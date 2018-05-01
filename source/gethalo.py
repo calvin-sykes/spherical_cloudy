@@ -147,6 +147,10 @@ def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
     options   : The options dictionary which contains all the parameters/settings for the model
     """
 
+    # disable logging if running models in parallel
+    if options["run"]["pp_para"]:
+        logger.disable()
+
     bturb   = options['phys']['bturb'  ]
     gastemp = options['phys']['gastemp']
     metals  = options['phys']['metals' ]

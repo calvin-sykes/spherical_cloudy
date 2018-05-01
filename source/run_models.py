@@ -11,6 +11,9 @@ import constants
 import cosmo
 import logger
 
+from multiprocessing import Pool as mpPool
+from multiprocessing.pool import ApplyResult
+import signal
 
 # Check the output directory exists, create it if not
 def init_outdir(options):
@@ -164,7 +167,8 @@ def run_grid(opt, cosmopar, ions, dryrun=False):
             prev_fname = None
     return
 
-
+# PP models don't load each other
+# so they can all be run in parallel
 def run_grid_PP(opt, cosmopar, ions, dryrun=False):
     # Get arrays defining the grid of models to run
     gridparams = init_grid(opt)
@@ -188,21 +192,47 @@ def run_grid_PP(opt, cosmopar, ions, dryrun=False):
     const  = constants.get()
     cmtopc = const['cmtopc']
 
+    useMP = opt['run']['pp_para']
+
+    if useMP:
+        async_results = []
+        sigint_handler = signal.signal(signal.SIGINT, signal.SIG_IGN)
+        pool = mpPool(processes=len(models))
+        signal.signal(signal.SIGINT, sigint_handler)
+        opt['run']['ncpus'] = 1
+        logger.log('info', "Starting {} models in parallel".format(len(models)))
+        logger.log('warning', "Further output will be suppressed")
+        logger.disable()
+
     while models:
         i, j, k = models.pop()
-        logger.log('info', "###########################")
-        logger.log('info', "###########################")
-        logger.log('info', " slab depth {2:.1f} kpc ({0:d}/{1:d})".format(j+1,numdepth, depth[j]))
-        logger.log('info', " H density 10**{2:.1f} ({0:d}/{1:d})".format(i+1,numdens, density[i]))
-        logger.log('info', " redshift {2:.2f}      ({0:d}/{1:d})".format(k+1,numreds, redshift[k]))
-        logger.log('info', "###########################")
-        logger.log('info', "###########################")
         model = halomodel.make_halo(opt['geometry']['profile'],
                                     1000 * depth[j] / cmtopc,
                                     10.0**density[i])
         # Let's go!
         if not dryrun:
-            ok, res = gethalo.get_halo(model, redshift[k], cosmopar, ions, prevfile=None, options=opt)
+            if useMP:
+                async_results.append(pool.apply_async(gethalo.get_halo,
+                                                      args=(model, redshift[k], cosmopar, ions),
+                                                      kwds={'prevfile':None, 'options':opt}))
+            else:
+                logger.log('info', "###########################")
+                logger.log('info', "###########################")
+                logger.log('info', " slab depth {2:.1f} kpc ({0:d}/{1:d})".format(j+1,numdepth, depth[j]))
+                logger.log('info', " H density 10**{2:.1f} ({0:d}/{1:d})".format(i+1,numdens, density[i]))
+                logger.log('info', " redshift {2:.2f}      ({0:d}/{1:d})".format(k+1,numreds, redshift[k]))
+                logger.log('info', "###########################")
+                logger.log('info', "###########################")   
+                ok, res = gethalo.get_halo(model, redshift[k], cosmopar, ions, prevfile=None, options=opt)
+                if ok != True:
+                    # something went wrong with the model
+                    logger.log('error', res)
+
+    if useMP:
+        map(ApplyResult.wait, async_results)
+        logger.enable()
+        for ar in async_results:
+            ok, res = ar.get()
             if ok != True:
                 # something went wrong with the model
                 logger.log('error', res)

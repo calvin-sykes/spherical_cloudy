@@ -14,7 +14,7 @@ for str_opt in ['geometry:profile', 'UVB:spectrum', 'phys:temp_method', 'run:out
 for flt_opt in ['geometry:scale', 'geometry:acore', 'UVB:scale', 'UVB:slope', 'run:concrit', 'phys:gastemp', 'phys:metals', 'phys:bturb',
                 'phys:hescale']:
     option_types[flt_opt] = float
-for bool_opt in ['phys:ext_press', 'run:do_ref', 'run:do_smth']:
+for bool_opt in ['phys:ext_press', 'run:do_ref', 'run:do_smth', 'run:pp_para']:
     option_types[bool_opt] = lambda s: s.upper() == 'TRUE'
 
 # Default settings for options
@@ -23,6 +23,7 @@ def default(save=False):
     # Set the default options for running
     # Set some of the basic operation modes
     runpar = dict({})
+    runpar['pp_para'] = False      # Whether to run all plane parallel models in parallel
     runpar['miniter'] = 10         # Minimum number of iterations to perform
     runpar['maxiter'] = 100000     # Maximum number of iterations to perform
     runpar['nsample'] = 500        # Number of radial points to consider
@@ -88,7 +89,7 @@ def default(save=False):
         parser = configparser.ConfigParser()
         parser.read_dict(options)
 
-        with open('defaults.ini', 'w') as f:
+        with open('./input/defaults.ini', 'w') as f:
             parser.write(f)        
 
     return options
