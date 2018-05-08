@@ -70,6 +70,7 @@ def default(save=False):
                                         #   eagle - use cooling rate table from Eagle
                                         #   original - use Ryan's original thermal equilibrium function
                                         #   relhic - use tabulated nH-T relation from ABL paper
+                                        #   blend - use eqbm above nH=10**-4.8 and relhic below, interpolating smoothly bewtwwen them
     physpar['bturb'  ] = 0.0        # Value of turbulent Doppler parameter in km/s
     physpar['metals' ] = 1.0E-3     # metallicity relative to solar
     physpar['gastemp'] = 20000      # initial gas temperature in Kelvin

@@ -1,3 +1,5 @@
+#from __future__ import print_function, division
+
 import numpy as np
 from matplotlib import pyplot as plt
 import matplotlib.colors as mcolors
@@ -20,7 +22,7 @@ import logger
 import time
 import signal
 import sys
-from multiprocessing import cpu_count as mpCPUCount
+from multiprocessing import cpu_count as mpCPUCoun
 from multiprocessing import Pool as mpPool
 from multiprocessing.pool import ApplyResult
 import astropy.units as u
@@ -61,6 +63,21 @@ Recompute the photoionization rates for H I, He I, and He II.
 
 and so forth...
 """
+
+def s(x, a, b):
+    return 0.5 + 0.5 * np.tanh((x - a) / b)
+
+
+def blendfxgx(f, g, xover, smooth):
+    assert len(f) == len(g), (len(f), len(g))
+    x = np.arange(len(f))
+    if xover < smooth:
+        xover += smooth
+    elif xover + smooth > len(x):
+        xover -= smooth
+    smooth = s(x, xover, smooth)
+    return smooth * f + (1 - smooth) * g
+
 
 def sigmoid(x, A, B, x0, s):
     return A + B * np.tanh((x0 - x) / s)
@@ -160,7 +177,7 @@ class LivePlot:
                 fig.canvas.draw_idle()
                 fig.show()
             plt.pause(0.01)
-        else:
+            else:
             logger.log('warning', "No live figures to show")
 
     def close(self):
@@ -341,7 +358,7 @@ def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
     if temp_method == 'eagle':
         logger.log("info", "Using Eagle cooling function")
         cf_interp = eagle_coolfunc.load_eagle_cf(prim_He)
-    elif temp_method == 'relhic':
+    elif temp_method in {'relhic', 'blend'}:
         logger.log("info", "Using RELHIC nH-T relation")
         relhic_interp = eagle_coolfunc.load_relhic_nHT()
 
@@ -444,12 +461,14 @@ def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
     istore = 0
     store_Yprofs = np.zeros(Yprofs.shape + (nstore,))
 
+    store_temps = np.zeros(prof_temperature.shape + (nstore,))
+
     # Set the stopping criteria flags
     tstcrit  = np.zeros(nions,dtype=np.int)
     iteration = 0
     old_Yprofs = None
 
-    extra_plots = False
+    # BEGIN MAIN LOOP
     while (not np.array_equal(tstcrit,allionpnt)) or (iteration <= miniter):
         iteration += 1
         logger.log("info", "Iteration number: {0:d}".format(iteration))
@@ -458,6 +477,10 @@ def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
 
         # Store the old Yprofs
         store_Yprofs[:,:,istore] = Yprofs.copy()
+
+        # Store the old temperature profile
+        store_temps[:,istore] = prof_temperature.copy()
+
         istore += 1
         if istore >= nstore:
             istore = 0
@@ -843,12 +866,28 @@ def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
             prof_temperature = temp[loc_adiabatic]
 
         elif temp_method == 'relhic':
-            # hack: force density to maximum value that is tabulated
-            # for purpose of finding temperature
-            #clamped_dens = np.where(densitynH >= 1.0, 1.0, densitynH)
-            clamped_dens = densitynH ## TESTING
+            prof_temperature = relhic_interp(densitynH)
 
-            prof_temperature = relhic_interp(clamped_dens)
+        elif temp_method == 'blend':
+            # below threshold 10**-4.8/cm^3, use the adiabatic result
+            # above it, calculate thermal equilibrium
+            # use tanh blending function to get smooth transition
+            ad_temp = relhic_interp(densitynH)
+            if np.any(densitynH > 10**-4.8):
+                eq_temp = cython_fns.thermal_equilibrium_full(total_heat, total_cool, old_temperature)
+                loc = np.argmin(np.abs(densitynH - 10**-4.8))
+                prof_temperature = blendfxgx(ad_temp, eq_temp, loc, 50.0)
+
+                #def plot_blend(ax):
+                #    ax.plot(np.log10(densitynH), np.log10(prof_temperature), label='blend')
+                #    ax.plot(np.log10(densitynH), np.log10(eq_temp), label='eq')
+                #    ax.plot(np.log10(densitynH), np.log10(ad_temp), label='ad')
+                #    ax.legend()
+                #    ax.axvline(np.log10(densitynH[loc]), c='k')
+
+                #live_plot.draw('blend', plot_blend)
+            else:
+                prof_temperature = ad_temp
 
         elif temp_method == 'equilibrium':
             # Generate a range of temperature values the code is allowed to use
@@ -920,6 +959,13 @@ def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
             logger.log("info", "Averaging the stored Yprofs")
             Yprofs = np.mean(store_Yprofs, axis=2)
             #Yprofs = uniform_filter1d(Yprofs, 5, axis=0)
+
+        # Unclear whether this is helpful
+        #if iteration > 10 and pfit[0] > 0:
+        #    logger.log('warning', "Backwards progress in delta temps")
+        #    logger.log('warning', "Try averaging temperature profiles")
+        #    prof_temperature = 0.5 * (prof_temperature + store_temps[:, istore - 1])
+            
         tstcrit = ( (np.abs((old_Yprofs-Yprofs)/Yprofs)<concrit)|(Yprofs==0.0)).astype(np.int).sum(axis=1)
         if np.array_equal(tstcrit,allionpnt):
             break
