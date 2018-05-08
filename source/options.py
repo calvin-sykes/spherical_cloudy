@@ -14,7 +14,7 @@ for str_opt in ['geometry:profile', 'UVB:spectrum', 'phys:temp_method', 'run:out
 for flt_opt in ['geometry:scale', 'geometry:acore', 'UVB:scale', 'UVB:slope', 'run:concrit', 'phys:gastemp', 'phys:metals', 'phys:bturb',
                 'phys:hescale']:
     option_types[flt_opt] = float
-for bool_opt in ['phys:ext_press', 'run:do_ref', 'run:do_smth', 'run:pp_para']:
+for bool_opt in ['phys:ext_press', 'run:do_ref', 'run:do_smth', 'run:pp_para', 'run:lv_plot']:
     option_types[bool_opt] = lambda s: s.upper() == 'TRUE'
 
 # Default settings for options
@@ -37,6 +37,8 @@ def default(save=False):
                                    #   string: find file with matching name and start from there
     runpar['do_ref' ] = False      # Whether to attempt refining
     runpar['do_smth'] = True       # Whether to smooth out discontinuities in the H I Y profile
+    runpar['lv_plot'] = False      # Whether to plot each iteration without interrupting calculation
+                                   # (edit the source code to change what is plotted)
     options['run'   ] = runpar
 
     # Set logging settings

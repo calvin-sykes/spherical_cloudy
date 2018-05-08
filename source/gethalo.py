@@ -84,6 +84,7 @@ def mpcoldens(j, prof, radius, nummu, geom):
     else:
         logger.log("critical", "Geometry {0:s} is not allowed".format(geom))
         sys.exit(1)
+    return
 
 
 def mpphion(j, jnurarr, phelxs, nuzero, planck):
@@ -136,6 +137,39 @@ def mangle_string(str):
     return str.replace(".","d").replace("+","p").replace("-","m")
 
 
+class LivePlot:
+    
+    def __init__(self):
+        plt.ion()
+        self.figures = dict({}) #plt.figure()
+
+    def add_figure(self, name):
+        self.figures[name] = plt.figure()
+    
+    def draw(self, name, cmds):
+        try:
+            fig = self.figures[name]
+            fig.clear()
+            cmds(fig.gca())
+        except KeyError:
+            logger.log('error', "Live figure {} does not exist".format(name))
+
+    def show(self):
+        if len(self.figures):
+            for fig in self.figures.itervalues():
+                fig.canvas.draw_idle()
+                fig.show()
+            plt.pause(0.01)
+        else:
+            logger.log('warning', "No live figures to show")
+
+    def close(self):
+        for name in list(self.figures.iterkeys()):
+            plt.close(self.figures[name])
+            del self.figures[name]
+        plt.ioff()
+
+
 def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
              ions=["H I", "He I", "He II"], prevfile=None, options=None):
     """
@@ -172,6 +206,7 @@ def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
     ncpus   = options["run"]["ncpus"  ]
     do_ref  = options["run"]["do_ref" ]
     do_smth = options["run"]["do_smth"]
+    lv_plot = options["run"]["lv_plot"]
     refine  = options["run"]["refine" ]
 
     # Method used to define the radial coordinate
@@ -220,6 +255,11 @@ def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
     if ncpus <= 0: ncpus += mpCPUCount()
     if ncpus <= 0: ncpus = 1
     logger.log("info", "Using {0:d} CPUs".format(int(ncpus)))
+
+    if lv_plot:
+        live_plot = LivePlot()
+        live_plot.add_figure('temp_diffs')
+        live_plot.add_figure('rates')
 
     # make multiprocessing pool if using >1 CPUs
     # the reassignment of SIGINT is needed to make Ctrl-C work while the process pool is active
@@ -642,12 +682,8 @@ def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
         tmp_Yprofs = Yprofs.copy()
         inneriter = 0
 
-        if False and iteration > 0:
-            extra_plots = True
-
         ## BEGIN INNER ITERATION
         while True:
-
             # Calculate the Yprofs
             Yprofs = misc.calc_yprofs(ions,prof_rates,elID)
 
@@ -735,40 +771,16 @@ def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
         logger.log("info", "Inner iteration cycled {0:d} times".format(inneriter))
         ## END INNER ITERATION
 
-        if False: # and iteration > 30:
-            print("COLION")
-            plt.figure()
-            plt.plot(np.log10(radius*cmtopc),np.log10(prof_colion[0]))
-            plt.show()
-            print('GAMMA')
+        def plot_rates(ax):
+            ax.plot(np.log10(radius * cmtopc), np.log10(prof_phionrate[0]), label='phion')
+            ax.plot(np.log10(radius * cmtopc), np.log10(prof_scdryrate[0]), label='scdry')
+            ax.plot(np.log10(radius * cmtopc), np.log10(prof_other[0]), label='other')
+            ax.plot(np.log10(radius * cmtopc), np.log10(prof_colion[0]), label='colion')
+            ax.legend()
+            ax.annotate('iteration={}'.format(iteration), xy=(0.8, 0.2), xycoords='axes fraction')
+        live_plot.draw('rates', plot_rates)
 
-            hitemp = (prof_temperature > 1e4)
-            first = np.nonzero(hitemp)[0][0]
-            last = len(hitemp) - np.nonzero(hitemp[::-1])[0][0]
-            
-            plt.figure()
-            plt.plot(np.log10(radius * cmtopc), np.log10(prof_phionrate[0]), label='phion')
-            plt.plot(np.log10(radius * cmtopc), np.log10(prof_scdryrate[0]), label='scdry')
-            plt.plot(np.log10(radius * cmtopc), np.log10(prof_other[0]), label='other')
-            plt.plot(np.log10(radius * cmtopc), np.log10(prof_colion[0]), label='colion') 
-            plt.axvline(np.log10(radius * cmtopc)[first], c='k')
-            plt.axvline(np.log10(radius * cmtopc)[last], c='k')
-            plt.plot(np.log10(radius * cmtopc), np.log10(prof_gamma[0]), label = 'total')
-            plt.legend()
-            plt.show()
-            #
-            print('TEMPERATURE')
-            plt.figure()
-            plt.plot(np.log10(radius * cmtopc), np.log10(prof_temperature))
-            plt.show()
-            #
-            print('YPROFS')
-            plt.figure()
-            #plt.plot(np.log10(radius * cmtopc), np.log10(prof_rates[0]/np.max(prof_rates[0])))
-            plt.plot(np.log10(radius * cmtopc), Yprofs[0])
-            plt.show()        
-
-        # If the tabulated Eagle cooling function is used, there's no need to calculate any rates
+        # If a tabulated cooling function is used, there's no need to calculate any rates
         if temp_method not in {'eagle', 'relhic'}:
             logger.log("debug", "Calculating heating rate")
             # Construct an array of ionization energies and the corresponding array for the indices
@@ -860,37 +872,32 @@ def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
         else:
             logger.log("critical", "Undefined temperature method")
             assert 0
-        
-        if False: #iteration==1:
-            live_fig = plt.figure()
-            plt.ion()
 
-        if False: #(iteration % 1 == 0 or iteration > 100):
-            live_fig.clear()
+        if iteration > 10:
+            xvals = np.arange(iteration - 9, iteration)
+            yvals = []
+            temp_counter = istore - 1
+            # put ys in order of iteration count
+            while True:
+                yval = np.mean(np.abs(store_temps[:, temp_counter]
+                                      - store_temps[:, temp_counter - 1 if temp_counter > 0 else nstore-1]))
+                yvals.append(yval)
+                temp_counter -= 1
+                temp_counter = temp_counter % nstore
+                if temp_counter == istore:
+                   break
+            yvals.reverse()
+            
+            pfit = np.polyfit(xvals, yvals, 1)
 
-            live_ax = live_fig.gca()
+            def plot_temp_diffs(ax):
+                ax.plot(xvals, yvals)
+                ax.plot(xvals, xvals * pfit[0] + pfit[1])
+                ax.annotate('iteration={}'.format(iteration), xy=(0.8,0.20), xycoords='axes fraction')
+            live_plot.draw('temp_diffs', plot_temp_diffs)
 
-            # plot commands...
-            live_ax.set_xlabel('log(Radius (pc))')
-            live_ax.set_ylabel(r'log($n_H$)')
-            live_ax.plot(np.log10(radius * cmtopc), np.log10(densitynH))
-            live_ax.plot(np.log10(radius * cmtopc), np.log10(dens_scale * temp_densitynH))
-            #live_ax.plot(np.log10(radius * cmtopc), Yprofs[elID["H I"].id])
-            #live_ax.plot(np.log10(radius * cmtopc), Yprofs[elID["He I"].id])
-            #live_ax.plot(np.log10(radius * cmtopc), Yprofs[elID["He II"].id])
-            #live_ax.plot(np.log10(radius * cmtopc), masspp)
-            #live_ax.plot(np.log10(densitynH), prof_temperature)
-
-            #lax2 = live_ax.twinx()
-            #lax2.scatter(np.log10(radius * cmtopc), np.log10(densitynH), s=0.1, c='r')
-
-            #live_ax.annotate('iteration {}'.format(iteration), xy=(0.8,0.8), xycoords='axes fraction')
-            #live_ax.legend()
-
-            live_fig.canvas.draw_idle()
-            live_fig.show()
-
-            plt.pause(0.01)
+        if lv_plot:
+            live_plot.show()
 
         if np.size(np.where(prof_temperature<=1000.0001)[0]) != 0:
             logger.log("ERROR", "Profile temperature was estimated to be <= 1000 K")
@@ -994,6 +1001,9 @@ def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
     logger.log("info", "Test completed in {0:f} mins".format((timeB-timeA)/60.0))
 
     out_dir = options["run"]["outdir"]
+
+    if lv_plot:
+        live_plot.close()
 
     # Save the results        
     if geom in {"NFW", "Burkert", "Cored"}:
