@@ -1,3 +1,4 @@
+#-*- mode: python -*-
 # cython: profile=False
 
 # To get this running, you must do the following at the command line:
@@ -569,7 +570,7 @@ def cool_rate(double[::1] total_heat not None,
         for r in range(0,sz_r):
             for c in range(0,sz_c):
                 # Collisional excitation cooling (Black 1981, Cen 1992)
-                cool_colexc_HI =   (7.50E-19 / (1.0 + csqrt(temp[c]/1.0E5))) * cexp(-118348.0/temp[c]) * edensity[r] * prof_YHI[r] * densitynH[r]
+                cool_colexc_HI =   (7.50E-19 / (1.0 + csqrt(temp[c]/1.0E5))) * cexp(-118348.0/temp[c]) * edensity[r] * densitynH[r] * prof_YHI[r]
                 cool_colexc_HeI =  (9.10E-27 / (1.0 + csqrt(temp[c]/1.0E5))) * (temp[c]**-0.1687) * cexp(-13179.0/temp[c]) * edensity[r] * edensity[r] * prof_YHeI[r] * prim_He * densitynH[r]
                 cool_colexc_HeII = (5.54E-17 / (1.0 + csqrt(temp[c]/1.0E5))) * (temp[c]**-0.397) * cexp(-473638.0/temp[c]) * edensity[r] * prof_YHeII[r] * prim_He * densitynH[r]
                 cool_colexc = cool_colexc_HI+cool_colexc_HeI+cool_colexc_HeII
@@ -579,7 +580,7 @@ def cool_rate(double[::1] total_heat not None,
                 cool_colion_HeI =  (9.38E-22 / (1.0 + csqrt(temp[c]/1.0E5))) * csqrt(temp[c]) * cexp(-285335.4/temp[c]) * edensity[r] * densitynH[r] * prim_He * prof_YHeI[r]
                 cool_colion_HeII = (4.95E-22 / (1.0 + csqrt(temp[c]/1.0E5))) * csqrt(temp[c]) * cexp(-631515.0/temp[c]) * edensity[r] * densitynH[r] * prim_He * prof_YHeII[r]
                 cool_colion_HeS  = (5.01E-27 / (1.0 + csqrt(temp[c]/1.0E5))) * (temp[c]**-0.1687) * cexp(-55338.0/temp[c]) * edensity[r] * edensity[r] * densitynH[r] * prim_He * prof_YHeII[r]
-                cool_colion = (cool_colion_HI+cool_colion_HeI+cool_colion_HeII+cool_colion_HeS) * 2
+                cool_colion = (cool_colion_HI+cool_colion_HeI+cool_colion_HeII+cool_colion_HeS) #* 2 # TT thinks Cen rates are wrong
 
                 # Recombination cooling (Black 1981, Spitzer 1978)
                 cool_rec_HII   = 8.70E-27 * csqrt(temp[c]) * ((temp[c]/1.0E3)**-0.2) * (1.0/(1.0+(temp[c]/1.0E6)**0.7)) * edensity[r] * (1.0-prof_YHI[r])*densitynH[r]
@@ -620,6 +621,8 @@ def thermal_equilibrium_full(double[::1] total_heat not None,
     sz_c = total_cool.shape[1]
     cdef double[::1] prof_temperature = np.zeros((sz_r), dtype=DTYPE)
 
+    cdef double[::1] actual_cool = np.zeros(sz_r)
+
     # Generate a range of temperatures that the code is allowed to use:
     cdef double[::1] temp = np.logspace(3.0,6.0,sz_c)
 
@@ -627,11 +630,11 @@ def thermal_equilibrium_full(double[::1] total_heat not None,
         eflag = 0 # No error
         for r in range(0,sz_r):
             for c in range(0,sz_c):
-                if (c == sz_c-1) and (dmin == -1):
+                if (c == sz_c-1) and (dmin == -1): # end of T range and not found intersection
                     eflag = 1
                     dmin = 0
                     break
-                if c == 0:
+                if c == 0: # start
                     dmin = -1
                 else:
                     if (total_heat[r]>=pcool) and (total_heat[r]<total_cool[r,c]):
@@ -663,20 +666,19 @@ def thermal_equilibrium_full(double[::1] total_heat not None,
                                 btmp = old_temp[r]-temp[dmin]
                                 if btmp < 0.0: btmp *= -1.0
                 pcool = total_cool[r,c]
-            if dmin == -1:
-                prof_temperature[r] = temp[dmin]
-            elif dmin == sz_c-1:
+            if dmin == -1 or dmin == sz_c - 1:
                 prof_temperature[r] = temp[dmin]
             else:
-                gradval = (total_cool[r,dmin+1]-total_cool[r,dmin])/(temp[dmin+1]-temp[dmin])
+                gradval = (total_cool[r,dmin+1]-total_cool[r,dmin])/(temp[dmin+1]-temp[dmin]) # dcool/dT
                 if gradval == 0.0:
                     prof_temperature[r] = 0.5*(temp[dmin+1]-temp[dmin])
                     #with gil:
                     #    np.savetxt("gradvalzero_dmin"+str(dmin)+".dat",np.transpose((temp,coolfunc)))
                 else:
                     prof_temperature[r] = (total_heat[r]-(total_cool[r,dmin]-gradval*temp[dmin]))/gradval
+                    actual_cool[r] = total_cool[r, dmin] + gradval * (prof_temperature[r] - temp[dmin])
     if eflag == 1: print "ERROR :: HEATING RATE WAS LOWER/HIGHER THAN THE COOLING RATE FUNCTION!"
-    return np.asarray(prof_temperature)
+    return np.asarray(prof_temperature), np.asarray(actual_cool)
 
 
 @cython.wraparound(False)
@@ -934,7 +936,7 @@ def fgasx(double[::1] densitym not None,
 @cython.cdivision(True) 
 def mass_integral(double[::1] density not None,
                   double[::1] radius not None,
-                  float virialr):
+                  double virialr):
     """
     Calculate the total gas mass within the virial radius (numerically integrate)
     """
