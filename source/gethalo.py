@@ -330,7 +330,19 @@ def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
     for j in range(nions):
         xsecv = phionxsec.rate_function_arr(engy,phelxsdata[ions[j]])
         phelxs[j] = xsecv.copy()
-    
+
+    # If the slope of the UVB has been changed, renormalise it so that the hydrogen photoionisation rate
+    # stays the same as for the fiducial/flat H&M UVB
+    if slope != 0:
+        flat_jzero = radfields.HM_fiducial(elID, redshift, version)
+        flat_jzero *= options["UVB"]["scale"]
+        flat_gamma = 4 * np.pi * spTrapz(flat_jzero / (planck * nuzero) * phelxs[elID["H I"].id], nuzero)
+        temp_gamma = 4 * np.pi * spTrapz(jzero / (planck * nuzero) * phelxs[elID["H I"].id], nuzero)
+        rescale_factor = temp_gamma / flat_gamma
+        jzero /= rescale_factor
+        #new_gamma = 4 * np.pi * spTrapz(jzero / (planck * nuzero) * phelxs[elID["H I"].id], nuzero)
+        #assert np.allclose(flat_gamma, new_gamma)
+
     logger.log("debug", "Loading radiative recombination coefficients")
     rrecombrate = recomb.load_data_radi(elID)
 
