@@ -18,11 +18,12 @@ import misc
 import eagle_coolfunc
 import cython_fns
 import logger
+from scipy.integrate import trapz as spTrapz, cumtrapz as spCumTrapz
 
 import time
 import signal
 import sys
-from multiprocessing import cpu_count as mpCPUCoun
+from multiprocessing import cpu_count as mpCPUCount
 from multiprocessing import Pool as mpPool
 from multiprocessing.pool import ApplyResult
 import astropy.units as u
@@ -177,7 +178,7 @@ class LivePlot:
                 fig.canvas.draw_idle()
                 fig.show()
             plt.pause(0.01)
-            else:
+        else:
             logger.log('warning', "No live figures to show")
 
     def close(self):
@@ -281,8 +282,10 @@ def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
 
     if lv_plot:
         live_plot = LivePlot()
-        live_plot.add_figure('temp_diffs')
-        live_plot.add_figure('rates')
+        #live_plot.add_figure('temp_diffs')
+        #live_plot.add_figure('rates')
+        live_plot.add_figure('heat_cool')
+        #live_plot.add_figure('dens_prof')
 
     # make multiprocessing pool if using >1 CPUs
     # the reassignment of SIGINT is needed to make Ctrl-C work while the process pool is active
@@ -317,15 +320,6 @@ def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
         logger.log("CRITICAL", "The radiation field {0:s} is not implemented yet".format(options["radfield"]))
         sys.exit()
 
-    #Jstern, nustern = radfields.HMbackground_z0_sternberg()  
-    #plt.figure()
-    #plt.xlim(0,10)
-    #plt.plot(( nuzero/3.287E15), np.log10( nuzero * jzero ))
-    #plt.plot((nustern/3.287E15), np.log10(nustern * Jstern))
-    #plt.axvline(1)
-    #plt.axvline(4)
-    #plt.show()
-    
     # convert to an energy
     engy = planck * nuzero / elvolt
 
@@ -802,17 +796,19 @@ def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
         logger.log("info", "Inner iteration cycled {0:d} times".format(inneriter))
         ## END INNER ITERATION
 
-        def plot_rates(ax):
-            ax.plot(np.log10(radius * cmtopc), np.log10(prof_phionrate[0]), label='phion')
-            ax.plot(np.log10(radius * cmtopc), np.log10(prof_scdryrate[0]), label='scdry')
-            ax.plot(np.log10(radius * cmtopc), np.log10(prof_other[0]), label='other')
-            ax.plot(np.log10(radius * cmtopc), np.log10(prof_colion[0]), label='colion')
-            ax.legend()
-            ax.annotate('iteration={}'.format(iteration), xy=(0.8, 0.2), xycoords='axes fraction')
-        live_plot.draw('rates', plot_rates)
+        if lv_plot:
+            def plot_rates(ax):
+                ax.plot(np.log10(radius * cmtopc), np.log10(prof_phionrate[0]), label='phion')
+                ax.plot(np.log10(radius * cmtopc), np.log10(prof_scdryrate[0]), label='scdry')
+                ax.plot(np.log10(radius * cmtopc), np.log10(prof_other[0]), label='other')
+                ax.plot(np.log10(radius * cmtopc), np.log10(HIIdensity[0] * prof_chrgtraniHII[0]), label='CT HII')
+                ax.plot(np.log10(radius * cmtopc), np.log10(HeIIdensity[0] * prof_chrgtraniHeII[0]), label='CT HeII')
+                ax.legend()
+                ax.annotate('iteration={}'.format(iteration), xy=(0.8, 0.2), xycoords='axes fraction')
+            #live_plot.draw('rates', plot_rates)
 
         # If a tabulated cooling function is used, there's no need to calculate any rates
-        if temp_method not in {'eagle', 'relhic'}:
+        if temp_method not in {'eagle', 'relhic', 'isothermal'} or (temp_method =='blend' and np.any(densitynH > 10**-4.8)):
             logger.log("debug", "Calculating heating rate")
             # Construct an array of ionization energies and the corresponding array for the indices
             ionlvl = np.zeros(nions,dtype=np.float)
@@ -839,7 +835,7 @@ def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
         old_temperature = prof_temperature.copy()
         
         if temp_method == 'original':
-            prof_temperature = cython_fns.thermal_equilibrium_full(total_heat, total_cool, old_temperature)
+            prof_temperature, actual_cool = cython_fns.thermal_equilibrium_full(total_heat, total_cool, old_temperature)
 
         elif temp_method == 'eagle':
             # hack: force density to maximum value that is tabulated
@@ -897,54 +893,29 @@ def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
             else:
                 prof_temperature = ad_temp
 
-        elif temp_method == 'equilibrium':
-            # Generate a range of temperature values the code is allowed to use
-            temp = np.logspace(3, 6, 1000)
-            # Equilibrium is achieved when absolute value of net rate is minimised
-            loc_eqbm = np.argmin(np.abs(total_heat[:, np.newaxis] - total_cool), axis=1)
-            prof_temperature = temp[loc_eqbm]
-
-        elif temp_method == 'adiabatic':
-            # difference of normalised rates as per Appendix B, Theuns+ 98
-            net_rate = np.abs(total_heat[:, np.newaxis] - total_cool) / densitynH[:, np.newaxis]**2
-
-            # Generate a range of temperature values the code is allowed to use
-            temp = np.logspace(3, 6, 1000)
-
-            # net rates such that the cooling time equals the Hubble time
-            hubb_rates = (1.5 * kB * temp[np.newaxis, :] * protmss) / (masspp * densitym*(1-prim_He)**2*hubb_time)[:, np.newaxis]
-            ord_adiabatic = np.argsort(np.abs(net_rate - hubb_rates), axis=1)
-            prof_temperature = np.sort(temp[ord_adiabatic[:,0:5]], axis=1)[:,0]
+        elif temp_method == 'isothermal':
+            pass # gas temperature was set at beginning, leave unchanged
 
         else:
             logger.log("critical", "Undefined temperature method")
             assert 0
 
-        if iteration > 10:
-            xvals = np.arange(iteration - 9, iteration)
-            yvals = []
-            temp_counter = istore - 1
-            # put ys in order of iteration count
-            while True:
-                yval = np.mean(np.abs(store_temps[:, temp_counter]
-                                      - store_temps[:, temp_counter - 1 if temp_counter > 0 else nstore-1]))
-                yvals.append(yval)
-                temp_counter -= 1
-                temp_counter = temp_counter % nstore
-                if temp_counter == istore:
-                   break
-            yvals.reverse()
-            
-            pfit = np.polyfit(xvals, yvals, 1)
-
-            def plot_temp_diffs(ax):
-                ax.plot(xvals, yvals)
-                ax.plot(xvals, xvals * pfit[0] + pfit[1])
-                ax.annotate('iteration={}'.format(iteration), xy=(0.8,0.20), xycoords='axes fraction')
-            live_plot.draw('temp_diffs', plot_temp_diffs)
-
-        if lv_plot:
-            live_plot.show()
+        #if iteration > 10:
+        #    xvals = np.arange(iteration - 9, iteration)
+        #    yvals = []
+        #    temp_counter = istore - 1
+        #    # put ys in order of iteration count
+        #    while True:
+        #        yval = np.mean(np.abs(store_temps[:, temp_counter]
+        #                              - store_temps[:, temp_counter - 1 if temp_counter > 0 else nstore-1]))
+        #        yvals.append(yval)
+        #        temp_counter -= 1
+        #        temp_counter = temp_counter % nstore
+        #        if temp_counter == istore:
+        #           break
+        #    yvals.reverse()
+        #    
+        #    pfit = np.polyfit(xvals, yvals, 1)
 
         if np.size(np.where(prof_temperature<=1000.0001)[0]) != 0:
             logger.log("ERROR", "Profile temperature was estimated to be <= 1000 K")
@@ -952,6 +923,14 @@ def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
             logger.log("ERROR", "Try a smaller radial range, or stronger radiation field")
             wtmp = np.where((prof_temperature<=1000.0001) | np.isnan(prof_temperature))
             prof_temperature[wtmp] = 1000.0001
+
+        if lv_plot:
+            def plot_heat_cool(ax):
+                order = np.argsort(prof_temperature)
+                ax.plot(prof_temperature[order], np.log10(total_heat[order]))
+                ax.plot(prof_temperature[order], np.log10(actual_cool[order]))
+            live_plot.draw('heat_cool', plot_heat_cool)
+
         # Now make sure that the temperature jump is small
         # The maximum allowed jump is made large at the beginning and decreases as the iteration count increases
         # This helps speed up convergence
@@ -964,9 +943,13 @@ def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
             prof_temperature = old_temperature-tmptemp
             
         if iteration >= 100 and iteration%1 == 0:
+        #if (maxiter - iteration < 30):
             logger.log("info", "Averaging the stored Yprofs")
             Yprofs = np.mean(store_Yprofs, axis=2)
             #Yprofs = uniform_filter1d(Yprofs, 5, axis=0)
+
+        if lv_plot:
+            live_plot.show()
 
         # Unclear whether this is helpful
         #if iteration > 10 and pfit[0] > 0:
