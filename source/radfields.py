@@ -25,6 +25,11 @@ def HMbackground_z0_sternberg(nu=None,maxvu=200.0,num=10000):
     return J, nu*nu0
 
 def HMbackground(elID,redshift=3.0, HMversion='12', alpha_UV=0):
+    Jnu, nu, discretised_z = _HM_background_impl(elID, redshift, HMversion, alpha_UV)
+    logger.log("info", "Using HM{1:s} background at z={0:f}".format(discretised_z, HMversion))
+    return Jnu, nu
+
+def _HM_background_impl(elID,redshift, HMversion, alpha_UV):
     const = constants.get()
     planck  = const["planck"]
     elvolt  = const["elvolt"]
@@ -35,7 +40,6 @@ def HMbackground(elID,redshift=3.0, HMversion='12', alpha_UV=0):
     data = np.loadtxt(os.path.join(os.path.dirname(__file__), "data/radfields/HM{:s}_UVB.dat").format(HMversion), usecols=usecols)
     rdshlist = data[0,:]
     amin = np.argmin(np.abs(rdshlist-redshift))
-    logger.log("info", "Using HM{1:s} background at z={0:f}".format(rdshlist[amin], HMversion))
     waveAt, Jnut = data[1:,0], data[1:,amin+1]
     waveA = waveAt[1:]*1.0E-10
     #w = np.where(waveAt < 912.0)
@@ -95,21 +99,22 @@ def HMbackground(elID,redshift=3.0, HMversion='12', alpha_UV=0):
     egyt = nut * planck # energies
 
     # Shape parameter (Crighton et al 2015, https://arxiv.org/pdf/1406.4239.pdf)
-    logJ = np.log10(Jnut)
-    e0  = elID["H I"].ip * elvolt
-    e1  = 10 * elID["H I"].ip * elvolt
-    rge0 = np.logical_and(e0 <= egyt, egyt <= e1)
-    rge1 = egyt > e1
-
-    idx1 = np.searchsorted(egyt, e1)
-
-    logJ[rge0] = logJ[rge0] + alpha_UV * np.log10(egyt[rge0] / e0)
-    logJ[rge1] = logJ[rge1] + alpha_UV * np.log10(e1 / e0)
-
-    Jnut = 10**logJ
+    if alpha_UV != 0:
+        logJ = np.log10(Jnut)
+        e0  = elID["H I"].ip * elvolt
+        e1  = 10 * elID["H I"].ip * elvolt
+        rge0 = np.logical_and(e0 <= egyt, egyt <= e1)
+        rge1 = egyt > e1
+        idx1 = np.searchsorted(egyt, e1)
+        logJ[rge0] = logJ[rge0] + alpha_UV * np.log10(egyt[rge0] / e0)
+        logJ[rge1] = logJ[rge1] + alpha_UV * np.log10(e1 / e0)
+        Jnut = 10**logJ
     
-    #return Jnut[argsrt], nut[argsrt]
-    return Jnut, nut
+    return Jnut, nut, rdshlist[amin]
+
+def HM_fiducial(elID,redshift, HMversion):
+    return _HM_background_impl(elID, redshift, HMversion, 0.0)[0]
+    #return np.loadtxt(os.path.join(os.path.dirname(__file__), "data/radfields/fiducial_j0_hm{:s}.dat").format(HMversion), usecols=1)
 
 def powerlaw(elID,):
     const = constants.get()

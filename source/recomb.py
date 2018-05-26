@@ -1,5 +1,6 @@
 import numpy as np
 import misc
+import os
 
 def rate_function_diel_arr(temp, arr):
     """
@@ -211,8 +212,8 @@ def dielectronic(ion,temp):
 def load_data_diel(elID):
     datadict=dict({})
     # Load the coefficients data
-    data_c = open("data/recomb_diel_ci.dat").readlines()
-    data_E = open("data/recomb_diel_Ei.dat").readlines()
+    data_c = open(os.path.join(os.path.dirname(__file__), "data/recomb_diel_ci.dat")).readlines()
+    data_E = open(os.path.join(os.path.dirname(__file__), "data/recomb_diel_Ei.dat")).readlines()
     ekeys = elID.keys()
     for i in range(len(data_c)):
         if data_c[i].strip()[0] == '#': continue
@@ -235,7 +236,7 @@ def load_data_diel(elID):
 def load_data_radi(elID):
     datadict=dict({})
     # Load the coefficients data
-    data = open("data/recomb_radi.dat").readlines()
+    data = open(os.path.join(os.path.dirname(__file__), "data/recomb_radi.dat")).readlines()
     ekeys = elID.keys()
     for i in range(len(data)):
         if data[i].strip()[0] == '#': continue
