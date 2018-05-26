@@ -263,7 +263,7 @@ def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
     hubb_time = cosmoVal.age(redshift).to(u.s).value
 
     # Get the element ID numbers
-    elID, extions = elemids.getids(ions,metals)
+    elID = elemids.getids(ions,metals,Hescale)
 
     # How many ions do we need to calculate
     nions = len(ions)
@@ -286,10 +286,11 @@ def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
         signal.signal(signal.SIGINT, sigint_handler)
 
     # Get the primordial number abundance of He relative to H
+    # (Scaling has been moved to elemids.py)
     if "He I" in ions:
-        prim_He = elID["He I"].abund * Hescale
+        prim_He = elID["He I"].abund
     elif "He II" in ions:
-        prim_He = elID["He II"].abund * Hescale
+        prim_He = elID["He II"].abund
     else:
         logger.log("CRITICAL", "You must include ""He I"" and ""He II"" in your model")
         sys.exit(1)
