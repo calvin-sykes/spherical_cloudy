@@ -560,12 +560,12 @@ def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
         logger.log("debug", "Calculating phionization rates")
         if ncpus == 1:
             for j in range(nions):
-                phionr = 4.0*np.pi * cython_fns.phionrate(jnurarr, phelxs[j], nuzero, planck*1.0E7)
+                phionr = 4.0*np.pi * cython_fns.phionrate(jnurarr, phelxs[j], nuzero, planck)
                 prof_phionrate[j] = phionr.copy()
         else:
             async_results = []
             for j in range(nions):
-                async_results.append(pool.apply_async(mpphion, (j, jnurarr, phelxs[j], nuzero, planck*1.0E7)))
+                async_results.append(pool.apply_async(mpphion, (j, jnurarr, phelxs[j], nuzero, planck)))
             map(ApplyResult.wait, async_results)
             for j in range(nions):
                 getVal = async_results[j].get()
@@ -575,35 +575,12 @@ def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
         prof_colion = np.zeros((nions,npts))
         for j in range(nions):
             if usecolion == "Dere2007":
-                ratev = colioniz.rate_function_Dere2007(1.0E-7*prof_temperature*kB/elvolt, colionrate[ions[j]])
+                ratev = colioniz.rate_function_Dere2007(prof_temperature*kB/elvolt, colionrate[ions[j]])
             elif usecolion == "Voronov1997":
-                ratev = colioniz.rate_function_arr(1.0E-7*prof_temperature*kB/elvolt, colionrate[ions[j]])
+                ratev = colioniz.rate_function_arr(prof_temperature*kB/elvolt, colionrate[ions[j]])
             elif usecolion == "Chianti":
-                ratev = colioniz.rate_function_Chianti(1.0E-7*prof_temperature*kB/elvolt, colionrate[ions[j]], coliontemp)
+                ratev = colioniz.rate_function_Chianti(prof_temperature*kB/elvolt, colionrate[ions[j]], coliontemp)
             prof_colion[j] = ratev.copy()
-
-
-        if False:
-            crate_Dere = colioniz.load_data(elID, rates="Dere2007")
-            #crate_Voronov = colioniz.load_data(elID, rates="Voronov1997")
-            crate_Chianti, coliontemp = colioniz.load_data(elID, rates="Chianti")
-
-            plt.figure()
-            plt.xlabel(r'$\log_{10}(\rm{Radius} (pc))$')
-            plt.ylabel(r'$\log_{10}(\rm{Rate})$')
-            #plt.plot(np.log10(radius * cmtopc), np.log10(colioniz.rate_function_arr(1.0E-7*prof_temperature*kB/elvolt, crate_Voronov["H I"])), label='Voronov97')
-            plt.plot(np.log10(radius * cmtopc), np.log10(colioniz.rate_function_Chianti(1.0E-7*prof_temperature*kB/elvolt, crate_Chianti["H I"], coliontemp)), '-', label='Chianti')
-            plt.plot(np.log10(radius * cmtopc), np.log10(colioniz.rate_function_Dere2007(1.0E-7*prof_temperature*kB/elvolt, crate_Dere["H I"])), '--', label='Dere07')
-            plt.legend()
-            plt.show()
-
-            plt.figure()
-            plt.xlabel(r'$\log_{10}(\rm{Temperature} (eV))$')
-            plt.ylabel(r'$\log_{10}(\rm{Rate})$')
-            plt.plot(np.log10(coliontemp), np.log10(colioniz.rate_function_Chianti(coliontemp, crate_Chianti["H I"], coliontemp)), '-', label='Chianti')
-            plt.plot(np.log10(coliontemp), np.log10(colioniz.rate_function_Dere2007(coliontemp, crate_Dere["H I"])), '--', label='Dere2007')
-            plt.legend()
-            plt.show()
 
         # the secondary photoelectron collisional ionization rates (probably not important for metals -- Section II, Shull & van Steenberg (1985))
         logger.log("debug", "Integrate over frequency to get secondary photoelectron ionization")
@@ -682,7 +659,8 @@ def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
         prof_recombCTHeI = np.zeros((nions,npts))
         for j in range(nions):
             ratev = recomb.rate_function_radi_arr(prof_temperature, rrecombrate[ions[j]])
-            if ions[j] in drecombelems: ratev += recomb.rate_function_diel_arr(prof_temperature, drecombrate[ions[j]])
+            if ions[j] in drecombelems:
+                ratev += recomb.rate_function_diel_arr(prof_temperature, drecombrate[ions[j]])
             prof_recomb[j] = ratev.copy()
             #ratev = chrgtran.HI_target(ions[j],prof_temperature)
             if ions[j] in chrgtran_HItargs:
@@ -1136,4 +1114,3 @@ def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
         # Everything is OK
         # Return True, and the output filename to be used as the input to the next iteration    
         return (True, outfname + '.npy')
-
