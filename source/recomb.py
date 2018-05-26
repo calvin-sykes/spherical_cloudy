@@ -255,16 +255,19 @@ def load_data_radi(elID):
     # Manually add/correct some additional data
     datadict["D I"] = datadict["H I"].copy()
     datadict["Si I"] = np.array([1.0,5.90E-13,0.601])
-    k = datadict.keys()
     return datadict
 
-def Ha_recomb(prof_temperature):
+def Ha_recomb(prof_temperature, case='B'):
     """
     Table 4.2, Osterbrock & Ferland (2006), pg. 73
     """
     temps = np.array([2500.0, 5000.0, 10000.0, 20000.0])
-    alpha = np.array([9.07E-14, 5.37E-14, 3.03E-14, 1.62E-14])
-    scale = np.array([3.30, 3.05, 2.87, 2.76])
+    if case == 'B':
+        alpha = np.array([9.07E-14, 5.37E-14, 3.03E-14, 1.62E-14])
+        scale = np.array([3.30, 3.05, 2.87, 2.76])
+    else:
+        alpha = np.array([6.61E-14, 3.78E-14, 2.04E-14, 1.03E-14])
+        scale = np.array([3.47, 3.10, 2.86, 2.69])
     alpha *= scale
     coeff = np.polyfit(np.log10(temps), np.log10(alpha), 2)
     #from matplotlib import pyplot as plt

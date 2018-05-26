@@ -226,6 +226,12 @@ def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
     lv_plot = options["run"]["lv_plot"]
     refine  = options["run"]["refine" ]
 
+    # What quantities should be output
+    svrates = options["save"]["rates"    ] # ionisation rates
+    svrcmb  = options["save"]["recomb"   ] # recombination rates
+    svhtcl  = options["save"]["heat_cool"] # heating + cooling rates
+    svjnu   = options["save"]["intensity"] # mean intensity
+
     # Method used to define the radial coordinate
     # depends on whether we are refining a model
     if refine:
@@ -1042,7 +1048,10 @@ def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
     Harecomb = recomb.Ha_recomb(prof_temperature)
     HIIdensity = densitynH * (1.0-Yprofs[elID["H I"].id])
     elecprot = Harecomb*electrondensity*HIIdensity
-    HaSB = (1.0/(4.0*np.pi)) * cython_fns.coldensprofile(elecprot, radius)  # photons /cm^2 / s / SR
+    if geom in {"NFW", "Burkert", "Cored"}:
+        HaSB = (1.0/(4.0*np.pi)) * cython_fns.coldensprofile(elecprot, radius)  # photons /cm^2 / s / SR
+    elif geom == "PP":
+        HaSB = (1.0/(4.0*np.pi)) * cython_fns.calc_coldensPP(elecprot, radius)  # photons /cm^2 / s / SR
     HaSB = HaSB * (1.98645E-8/6563.0)/4.254517E10   # ergs /cm^2 / s / arcsec^2
 
     timeB = time.time()
@@ -1093,10 +1102,38 @@ def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
                                  prof_density.T,
                                  prof_coldens.T,
                                  Yprofs.T), axis=1)
-        # make sure array is C-contiguous
-        #tmpout = np.require(tmpout, 'C')
-
     np.save(outfname, tmpout)
+
+    if svrates:
+        tmpout = np.concatenate((radius.reshape((npts,1)) * cmtopc,
+                                prof_phionrate.T,
+                                prof_scdryrate.T,
+                                (densitynH * (1 - Yprofs[elID["H I"].id]).reshape((1, npts)).repeat(nions, axis=0) * prof_chrgtraniHII).T,
+                                (densitynH * (prim_He * Yprofs[elID["He II"].id]).reshape((1, npts)).repeat(nions, axis=0) * prof_chrgtraniHeII).T,
+                                prof_other.T,
+                                prof_colion.T), axis=1)
+        np.save(outfname + '_rates', tmpout)
+
+    if svrcmb:
+        tmpout = np.concatenate((radius.reshape((npts,1)) * cmtopc,
+                                 prof_recomb.T,
+                                 prof_recombCTHI.T,
+                                 prof_recombCTHeI.T), axis=1)
+        np.save(outfname + '_recomb', tmpout)
+
+    if svhtcl:
+        tmpout = np.concatenate((radius.reshape((npts,1)) * cmtopc,
+                                 prof_temperature.reshape((npts,1)),
+                                 total_heat.reshape((npts,1)),
+                                 actual_cool.reshape((npts,1))), axis=1)
+        np.save(outfname + '_heat_cool', tmpout)
+
+    if svjnu:
+        tmpout = np.concatenate((radius.reshape((npts,1)) * cmtopc,
+                                 jnurarr.T), axis=1)
+        tmpnu = np.insert(nuzero, 0, np.nan).reshape((1, len(nuzero) + 1))
+        tmpout = np.concatenate((tmpnu, tmpout), axis=0)
+        np.save(outfname + '_intensity', tmpout)
     
     # dispose of process pool
     if ncpus > 1:

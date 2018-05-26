@@ -9,12 +9,13 @@ import logger
 # What types each setting should be
 option_types = collections.defaultdict(lambda: int) # default to integer type
 for str_opt in ['geometry:profile', 'UVB:spectrum', 'phys:temp_method', 'run:outdir', 'run:resume', 'log:level', 'log:file',
-                'grid:virialm', 'grid:redshift', 'grid:baryscale', 'grid:radscale', 'grid:pp_depth', 'grid:pp_dens']:
+                'grid:virialm', 'grid:redshift', 'grid:baryscale', 'grid:radscale', 'grid:pp_cdens', 'grid:pp_dens']:
     option_types[str_opt] = str
 for flt_opt in ['geometry:scale', 'geometry:acore', 'UVB:scale', 'UVB:slope', 'run:concrit', 'phys:gastemp', 'phys:metals', 'phys:bturb',
                 'phys:hescale']:
     option_types[flt_opt] = float
-for bool_opt in ['phys:ext_press', 'run:do_ref', 'run:do_smth', 'run:pp_para', 'run:lv_plot']:
+for bool_opt in ['phys:ext_press', 'run:do_ref', 'run:do_smth', 'run:pp_para', 'run:lv_plot',
+                 'save:rates', 'save:heat_cool', 'save:recomb', 'save:intensity']:
     option_types[bool_opt] = lambda s: s.upper() == 'TRUE'
 
 # Default settings for options
@@ -41,6 +42,13 @@ def default(save=False):
                                    # (edit the source code to change what is plotted)
     options['run'   ] = runpar
 
+    savepar = dict({})
+    savepar['rates'    ] = True       # Whether to save the ionisation rates
+    savepar['recomb'   ] = True       # Whether to save the recombination rates
+    savepar['heat_cool'] = True       # Whether to save the heating and cooling rates
+    savepar['intensity'] = True       # Whether to save the mean intensity J_nu
+    options['save'     ] = savepar
+
     # Set logging settings
     logpar = dict({})
     logpar['level']  = 'debug' # Minimum level of warning to log ('debug', 'info', 'warning', 'error', 'critical')
@@ -65,12 +73,11 @@ def default(save=False):
     physpar = dict({})
     physpar['ext_press'  ] = False      # Whether to impose condition that density should approach cosmic mean
     physpar['temp_method'] = 'original' # Method to use to calculate temperature:
-                                        #   equilibrium - always use thermal equilibrium
-                                        #   adiabatic - always use 1/rate = Hubble time
                                         #   eagle - use cooling rate table from Eagle
                                         #   original - use Ryan's original thermal equilibrium function
                                         #   relhic - use tabulated nH-T relation from ABL paper
-                                        #   blend - use eqbm above nH=10**-4.8 and relhic below, interpolating smoothly bewtwwen them
+                                        #   blend - use eqbm above nH=10**-4.8 and relhic below, interpolating smoothly between them
+                                        #   isothermal - use constant temperature given by phys:gastemp
     physpar['bturb'  ] = 0.0        # Value of turbulent Doppler parameter in km/s
     physpar['metals' ] = 1.0E-3     # metallicity relative to solar
     physpar['gastemp'] = 20000      # initial gas temperature in Kelvin
@@ -84,7 +91,7 @@ def default(save=False):
     gridpar['redshift' ] = "np.zeros(1)" # redshifts
     gridpar['baryscale'] = "np.ones(1)" # scaling of universal baryon fraction
     gridpar['radscale' ] = "np.ones(1)" # scaling of UVB intensity
-    gridpar['pp_depth' ] = "np.ones(1)" # Depth of slab in kpc (Plane parallel geometry only)
+    gridpar['pp_cdens' ] = "np.full(1, 18)" # log of column density depth in slab in cm^-2 (Plane parallel geometry only)
     gridpar['pp_dens'  ] = "np.full(1, -1.0)" # log of H number density in slab in cm^-3 (Plane parallel geometry only)
     options['grid'     ] = gridpar
 
