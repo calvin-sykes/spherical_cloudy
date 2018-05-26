@@ -247,9 +247,9 @@ def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
     geom = options["geometry"]["profile"]
     geomscale = options["geometry"]["scale"]
 
-    # slab thickness and constant H volume density for plane parallel models
+    # min and max column density, and constant H volume density for plane parallel models
     if geom == 'PP':
-        PP_depth = hmodel.depth
+        PP_cden  = hmodel.cden
         PP_dens  = hmodel.density
 
     # boundary condition to use
@@ -429,7 +429,8 @@ def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
             prof_coldens = np.zeros((nions,npts,nummu))
             prof_density = 1.0E-1*np.ones((nions,npts))
         elif geom == "PP":
-            radius  = np.linspace(0.0, PP_depth, npts)
+            depth = PP_cden / PP_dens
+            radius = np.linspace(0, depth, npts)
             densitynH = np.ones(npts) * PP_dens
             prof_coldens = np.zeros((nions,npts))
             prof_density = 1.0E-1*np.ones((nions,npts))
@@ -1076,13 +1077,13 @@ def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
                                  Yprofs.T), axis=1)
     elif geom == "PP":
         dstring = mangle_string("{0:+3.2f}".format(np.log10(PP_dens)))
-        rstring = mangle_string("{0:4.2f}".format(np.log10(PP_depth * cmtopc / 1000)))
+        cdstring = mangle_string("{0:+3.2f}".format(np.log10(PP_cden)))
         if options["UVB"]["spectrum"][0:2] == "HM":
             hstring = mangle_string("HMscale{0:+3.2f}".format(np.log10(options["UVB"]["scale"])))
         elif options["UVB"]["spectrum"][0:2]=="PL":
             hstring = options["UVB"]["spectrum"]
-        outfname = out_dir + ("{0:s}_density{1:s}_radius{2:s}_{3:s}_{4:d}"
-                    .format(geom,dstring,rstring,hstring,npts))
+        outfname = out_dir + ("{0:s}_density{1:s}_coldens{2:s}_{3:s}_{4:d}"
+                    .format(geom,dstring,cdstring,hstring,npts))
         logger.log("info", "Saving file {0:s}.npy".format(outfname))
         tmpout = np.concatenate((radius.reshape((npts,1)) * cmtopc,
                                  prof_temperature.reshape((npts,1)),

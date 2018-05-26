@@ -46,8 +46,8 @@ class CoredHalo(HaloModel):
 
 
 class PPHalo(HaloModel):
-    def __init__(self, depth, dens):
-        self.depth = depth
+    def __init__(self, coldens, dens):
+        self.cden = coldens
         self.density = dens
         self.name = 'PP'
 
