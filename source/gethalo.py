@@ -159,19 +159,20 @@ class LivePlot:
     
     def __init__(self):
         plt.ion()
-        self.figures = dict({}) #plt.figure()
+        self.figures = dict({})
 
-    def add_figure(self, name):
-        self.figures[name] = plt.figure()
+    #def add_figure(self, name):
+    #    self.figures[name] = plt.figure()
     
     def draw(self, name, cmds):
         try:
             fig = self.figures[name]
-            fig.clear()
-            cmds(fig.gca())
         except KeyError:
-            logger.log('error', "Live figure {} does not exist".format(name))
-
+            fig = plt.figure()
+            self.figures[name] = fig
+        fig.clear()
+        cmds(fig.gca())
+            
     def show(self):
         if len(self.figures):
             for fig in self.figures.itervalues():
@@ -284,7 +285,7 @@ def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
         live_plot = LivePlot()
         #live_plot.add_figure('temp_diffs')
         #live_plot.add_figure('rates')
-        live_plot.add_figure('heat_cool')
+        #live_plot.add_figure('heat_cool')
         #live_plot.add_figure('dens_prof')
 
     # make multiprocessing pool if using >1 CPUs
