@@ -234,6 +234,13 @@ if __name__ == '__main__' or is_jug_running():
 
     opt = options.read_options(input_file)
 
+    # second argument disables logging to file if given
+    try:
+        if sys.argv[2] == 'redirect':
+            opt['log']['file'] = 'none'
+    except IndexError:
+        pass
+    
     # if running from interactive shell disable Jug parallel processing
     if not is_jug_running():
         opt['run']['pp_para'] = False
