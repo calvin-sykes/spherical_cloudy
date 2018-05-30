@@ -1,6 +1,7 @@
 import numpy as np
 import misc
 import os
+import logger
 
 def rate_function_diel_arr(temp, arr):
     """
@@ -25,11 +26,8 @@ def rate_function_radi_arr(temp, arr):
     elif form == 1:
         outrate = rate_function_pl(temp, arr[1], arr[2])
     else:
-        print "Form not implemented for radiative recombination rates", form
+        logger.log('error', "Form not implemented for radiative recombination rates (form = {})".format(form))
     return outrate
-
-
-
 
 def get_rate(temp, a, b, T0, T1):
     return a / ( np.sqrt(temp/T0) * ((1.0+np.sqrt(temp/T0))**(1.0-b)) * ((1.0+np.sqrt(temp/T1))**(1.0+b)) )
@@ -68,7 +66,7 @@ def rate_function_diel_badnell(temp, ci, Ei):
     return rateval
 
 def rate_function_diel(temp, a, b, T0, T1):
-    print "ERROR :: deprecated dielectronic recombination used"
+    logger.log('error', "Deprecated dielectronic recombination used")
     # High temperature rate
     rateval = a * (temp**-1.5) * np.exp(-T0/temp) * (1.0 + b*np.exp(-T1/temp))
     # Low temperature rate
@@ -262,12 +260,15 @@ def Ha_recomb(prof_temperature, case='B'):
     Table 4.2, Osterbrock & Ferland (2006), pg. 73
     """
     temps = np.array([2500.0, 5000.0, 10000.0, 20000.0])
-    if case == 'B':
+    if case.upper() == 'B':
         alpha = np.array([9.07E-14, 5.37E-14, 3.03E-14, 1.62E-14])
         scale = np.array([3.30, 3.05, 2.87, 2.76])
-    else:
+    elif case.upper() == 'A':
         alpha = np.array([6.61E-14, 3.78E-14, 2.04E-14, 1.03E-14])
-        scale = np.array([3.47, 3.10, 2.86, 2.69])
+        scale = np.array([3.42, 3.10, 2.86, 2.69])
+    else:
+        logger.log('error', "Ha recombination case must be 'A' or 'B'")
+    
     alpha *= scale
     coeff = np.polyfit(np.log10(temps), np.log10(alpha), 2)
     #from matplotlib import pyplot as plt
