@@ -354,11 +354,11 @@ def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
     logger.log("debug",  "Loading collisional ionization rate coefficients")
     usecolion = "Chianti"
     if usecolion == "Dere2007":
-        colionrate = colioniz.load_data(elID, rates="Dere2007")
+        colioncoeff = colioniz.load_data(elID, rates="Dere2007")
     elif usecolion == "Voronov1997":
-        colionrate = colioniz.load_data(elID, rates="Voronov1997")
+        colioncoeff = colioniz.load_data(elID, rates="Voronov1997")
     elif usecolion == "Chianti":
-        colionrate, coliontemp = colioniz.load_data(elID, rates="Chianti")
+        colioncoeff, coliontemp = colioniz.load_data(elID, rates="Chianti")
     else:
         logger.log("error", "Cannot load collisional ionization rates")
 
@@ -588,12 +588,17 @@ def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
         prof_colion = np.zeros((nions,npts))
         for j in range(nions):
             if usecolion == "Dere2007":
-                ratev = colioniz.rate_function_Dere2007(prof_temperature*kB/elvolt, colionrate[ions[j]])
+                ratev = colioniz.rate_function_Dere2007(prof_temperature*kB/elvolt, colioncoeff[ions[j]])
             elif usecolion == "Voronov1997":
-                ratev = colioniz.rate_function_arr(prof_temperature*kB/elvolt, colionrate[ions[j]])
+                ratev = colioniz.rate_function_arr(prof_temperature*kB/elvolt, colioncoeff[ions[j]])
             elif usecolion == "Chianti":
-                ratev = colioniz.rate_function_Chianti(prof_temperature*kB/elvolt, colionrate[ions[j]], coliontemp)
+                ratev = colioniz.rate_function_Chianti(prof_temperature*kB/elvolt, colioncoeff[ions[j]], coliontemp)
             prof_colion[j] = ratev.copy()
+
+        # Calculate collisional ionisation rates
+        prof_colionrate = np.zeros((nions,npts))
+        for j in range(nions):
+            prof_colionrate[j] = prof_colion[j] * electrondensity# * prof_density[j]
 
         # the secondary photoelectron collisional ionization rates (probably not important for metals -- Section II, Shull & van Steenberg (1985))
         logger.log("debug", "Integrate over frequency to get secondary photoelectron ionization")
@@ -664,7 +669,7 @@ def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
                 prof_chrgtraniHeII[j] = ratev.copy()
 
         # Total all of the ionization rates
-        prof_gamma = prof_phionrate + prof_scdryrate + HIIdensity*prof_chrgtraniHII + HeIIdensity*prof_chrgtraniHeII + prof_other + prof_colion
+        prof_gamma = prof_phionrate + prof_scdryrate + HIIdensity*prof_chrgtraniHII + HeIIdensity*prof_chrgtraniHeII + prof_other + prof_colionrate
 
         logger.log("debug", "Calculating recombination rates")
         prof_recomb = np.zeros((nions,npts))
@@ -750,21 +755,27 @@ def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
                         prof_scdryrate[j] = ratev.copy()
 
             # Colion
+            prof_colion = np.zeros((nions,npts))
             for j in range(nions):
                 if usecolion == "Dere2007":
-                    ratev = colioniz.rate_function_Dere2007(1.0E-7*prof_temperature*kB/elvolt, colionrate[ions[j]])
+                    ratev = colioniz.rate_function_Dere2007(prof_temperature*kB/elvolt, colioncoeff[ions[j]])
                 elif usecolion == "Voronov1997":
-                    ratev = colioniz.rate_function_arr(1.0E-7*prof_temperature*kB/elvolt, colionrate[ions[j]])
+                    ratev = colioniz.rate_function_arr(prof_temperature*kB/elvolt, colioncoeff[ions[j]])
                 elif usecolion == "Chianti":
-                    ratev = colioniz.rate_function_Chianti(1.0E-7*prof_temperature*kB/elvolt, colionrate[ions[j]], coliontemp)
+                    ratev = colioniz.rate_function_Chianti(prof_temperature*kB/elvolt, colioncoeff[ions[j]], coliontemp)
                 prof_colion[j] = ratev.copy()
+
+            # Calculate collisional ionisation rates
+            prof_colionrate = np.zeros((nions,npts))
+            for j in range(nions):
+                prof_colionrate[j] = prof_colion[j] * electrondensity# * prof_density[j]
 
             # Other
             for j in range(nions):
                 ratev = photoion.other(ions[j],engy,prof_density,densitynH,Yprofs,electrondensity,phelxs,prof_temperature,elID,kB,elvolt)
                 prof_other[j] = ratev.copy()
 
-            prof_gamma = prof_phionrate + prof_scdryrate + HIIdensity*prof_chrgtraniHII + HeIIdensity*prof_chrgtraniHeII + prof_other + prof_colion
+            prof_gamma = prof_phionrate + prof_scdryrate + HIIdensity*prof_chrgtraniHII + HeIIdensity*prof_chrgtraniHeII + prof_other + prof_colionrate
 
             # density of this specie = unionized fraction * H volume density * number abundance relative to H
             HIdensity  = Yprofs[elID["H I"].id]  * densitynH * elID["H I"].abund
@@ -1085,7 +1096,7 @@ def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
                                 (densitynH * (1 - Yprofs[elID["H I"].id]).reshape((1, npts)).repeat(nions, axis=0) * prof_chrgtraniHII).T,
                                 (densitynH * (prim_He * Yprofs[elID["He II"].id]).reshape((1, npts)).repeat(nions, axis=0) * prof_chrgtraniHeII).T,
                                 prof_other.T,
-                                prof_colion.T), axis=1)
+                                prof_colionrate.T), axis=1)
         np.save(outfname + '_rates', tmpout)
 
     if svrcmb:

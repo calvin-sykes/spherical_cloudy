@@ -1,6 +1,6 @@
 """
 See the following website for the relevant data
-http://www-cfadc.phy.ornl.gov/astro/ps/data/
+https://web.archive.org/web/20160526002340/http://www-cfadc.phy.ornl.gov/astro/ps/data/
 """
 import numpy as np
 import misc
