@@ -1,7 +1,7 @@
 # ----------------------------------------------------------------- #
 # If CHIANTI and ChiantiPy are not installed this script won't work #
 # ----------------------------------------------------------------- #
-#
+
 # Fetches collisional ionisation data from the CHIANTI database using
 # ChiantiPy and saves the rates to a data file 'colioniz_chianti.dat'
 
