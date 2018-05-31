@@ -238,6 +238,7 @@ if __name__ == '__main__' or is_jug_running():
     try:
         if sys.argv[2] == 'redirect':
             opt['log']['file'] = 'none'
+        opt['log']['level'] = sys.argv[3]
     except IndexError:
         pass
     
