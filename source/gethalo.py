@@ -810,7 +810,7 @@ def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
             #live_plot.draw('rates', plot_rates)
 
         # If a tabulated cooling function is used, there's no need to calculate any rates
-        if temp_method not in {'eagle', 'relhic', 'isothermal'} or (temp_method =='blend' and np.any(densitynH > 10**-4.8)):
+        if temp_method not in {'eagle', 'relhic', 'isothermal'}: #or (temp_method =='blend' and np.any(densitynH > 10**-4.8)):
             logger.log("debug", "Calculating heating rate")
             # Construct an array of ionization energies and the corresponding array for the indices
             ionlvl = np.zeros(nions,dtype=np.float)
@@ -879,19 +879,10 @@ def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
             # above it, calculate thermal equilibrium
             # use tanh blending function to get smooth transition
             ad_temp = relhic_interp(densitynH)
+            eq_temp, actual_cool = cython_fns.thermal_equilibrium_full(total_heat, total_cool, old_temperature)
             if np.any(densitynH > 10**-4.8):
-                eq_temp = cython_fns.thermal_equilibrium_full(total_heat, total_cool, old_temperature)
                 loc = np.argmin(np.abs(densitynH - 10**-4.8))
                 prof_temperature = blendfxgx(ad_temp, eq_temp, loc, 50.0)
-
-                #def plot_blend(ax):
-                #    ax.plot(np.log10(densitynH), np.log10(prof_temperature), label='blend')
-                #    ax.plot(np.log10(densitynH), np.log10(eq_temp), label='eq')
-                #    ax.plot(np.log10(densitynH), np.log10(ad_temp), label='ad')
-                #    ax.legend()
-                #    ax.axvline(np.log10(densitynH[loc]), c='k')
-
-                #live_plot.draw('blend', plot_blend)
             else:
                 prof_temperature = ad_temp
 
