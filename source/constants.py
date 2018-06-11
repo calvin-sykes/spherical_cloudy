@@ -11,3 +11,11 @@ def get():
     consdict["hztos"]   = 3.241E-20       # Conversion between km/s/Mpc to s
 
     return consdict
+
+def get_nt():
+
+    constdict = get()
+
+    from collections import namedtuple
+    constnt = namedtuple('Constants', constdict.iterkeys())
+    return constnt(constdict.itervalues())

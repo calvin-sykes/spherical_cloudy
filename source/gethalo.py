@@ -23,10 +23,8 @@ from scipy.integrate import trapz as spTrapz, cumtrapz as spCumTrapz
 import time
 import signal
 import sys
-from multiprocessing import cpu_count as mpCPUCount
-from multiprocessing import Pool as mpPool
+from multiprocessing import cpu_count as mpCPUCount, Pool as mpPool
 from multiprocessing.pool import ApplyResult
-import astropy.units as u
 from astropy.cosmology import FlatLambdaCDM
 from scipy.optimize import curve_fit as spCurveFit
 
@@ -267,8 +265,8 @@ def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
     temp_method = options["phys"]["temp_method"]
     
     # Set up the cosmology
-    cosmoVal = FlatLambdaCDM(H0=100.0*cosmopar[0] * u.km / u.s / u.Mpc, Om0=cosmopar[3])
-    hubb_time = cosmoVal.age(redshift).to(u.s).value
+    cosmoVal = FlatLambdaCDM(H0=100.0*cosmopar[0], Om0=cosmopar[3])
+    hubb_time = cosmoVal.age(redshift).value * (365.25 * 86400 * 1.0E9)
 
     # Get the element ID numbers
     elID = elemids.getids(ions,metals,Hescale)
@@ -645,6 +643,7 @@ def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
 
         # Calculate other forms of ionization (e.g. photons from H and He recombinations)
         logger.log("debug", "Calculate ionization rate from recombinations of H+, He+, He++")
+        
         prof_other = np.zeros((nions,npts))
         for j in range(nions):
             ratev = photoion.other(ions[j],engy,prof_density,densitynH,Yprofs,electrondensity,phelxs,prof_temperature,elID,kB,elvolt)
@@ -709,7 +708,9 @@ def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
             Yprofs = misc.calc_yprofs(ions,prof_rates,elID)
 
             # Test if the profiles have converged
-            tstconv = ( (np.abs((tmp_Yprofs-Yprofs)/Yprofs)<concrit**2)|(Yprofs==0.0)).astype(np.int).sum(axis=1)
+            tstconv_x = (np.abs((tmp_Yprofs-Yprofs)/Yprofs)<concrit**2)|(Yprofs==0.0)
+            tstconv_1mx = (np.abs(((1-tmp_Yprofs)-(1-Yprofs))/(1-Yprofs))<concrit**2)|((1-Yprofs)==0.0)
+            tstconv = np.logical_and(tstconv_x, tstconv_1mx).astype(np.int).sum(axis=1)
             
             # Reset ne and the rates
             electrondensity = densitynH * ( (1.0-Yprofs[elID["H I"].id]) + prim_He*Yprofs[elID["He II"].id] + 2.0*prim_He*(1.0-Yprofs[elID["He I"].id]-Yprofs[elID["He II"].id]) )
@@ -768,7 +769,7 @@ def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
             # Calculate collisional ionisation rates
             prof_colionrate = np.zeros((nions,npts))
             for j in range(nions):
-                prof_colionrate[j] = prof_colion[j] * electrondensity# * prof_density[j]
+                prof_colionrate[j] = prof_colion[j] * electrondensity
 
             # Other
             for j in range(nions):
