@@ -1028,7 +1028,8 @@ def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
     if geom in {"NFW", "Burkert", "Cored"}:
         HaSB = (1.0/(4.0*np.pi)) * cython_fns.coldensprofile(elecprot, radius)  # photons /cm^2 / s / SR
     elif geom == "PP":
-        HaSB = (1.0/(4.0*np.pi)) * cython_fns.calc_coldensPP(elecprot, radius)  # photons /cm^2 / s / SR
+        # calc_coldensPP does int_0^infty so need to double to get CD from -infty to +infty
+        HaSB = (1.0/(2.0*np.pi)) * cython_fns.calc_coldensPP(elecprot, radius)  # photons /cm^2 / s / SR
     HaSB = HaSB * (1.98645E-8/6563.0)/4.254517E10   # ergs /cm^2 / s / arcsec^2
 
     timeB = time.time()
