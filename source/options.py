@@ -1,5 +1,6 @@
 import collections
 import configparser
+import sys
 
 import logger
 
@@ -43,10 +44,10 @@ def default(save=False):
     options['run'   ] = runpar
 
     savepar = dict({})
-    savepar['rates'    ] = True       # Whether to save the ionisation rates
-    savepar['recomb'   ] = True       # Whether to save the recombination rates
-    savepar['heat_cool'] = True       # Whether to save the heating and cooling rates
-    savepar['intensity'] = True       # Whether to save the mean intensity J_nu
+    savepar['rates'    ] = False   # Whether to save the ionisation rates
+    savepar['recomb'   ] = False   # Whether to save the recombination rates
+    savepar['heat_cool'] = False   # Whether to save the heating and cooling rates
+    savepar['intensity'] = False   # Whether to save the mean intensity J_nu
     options['save'     ] = savepar
 
     # Set logging settings
@@ -113,7 +114,12 @@ def read_options(filename):
     logger.init(level='warning', name='options')
     
     parser = configparser.ConfigParser()
-    config = parser.read(filename)
+    try:
+        config = parser.read(filename)
+    except Exception as e:
+        logger.log('critical', "Error parsing config file {} (details follow)".format(filename), 'options')
+        logger.log('critical', e.message, 'options')
+        sys.exit(1)        
 
     for section in parser.sections():
         if section in options.keys():
