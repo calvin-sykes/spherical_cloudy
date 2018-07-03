@@ -812,7 +812,7 @@ def calc_xsec_energy(double[::1] xsec not None,
                     break
             if numin == -1:
                 with gil:
-                    print "ERROR :: energy out of range for yfactor (ionizations from recombinaitons of H+, He+, He++)"
+                    raise ValueError("Energy out of range for yfactor (ionizations from recombinations of H+, He+, He++)")
             gradv = (xsec[nu+1]-xsec[nu])/(xsecengy[nu+1]-xsecengy[nu])
             intc  = xsec[nu] - gradv*xsecengy[nu]
             retarr[r] = gradv*energy[r] + intc
