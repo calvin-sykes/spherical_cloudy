@@ -24,20 +24,20 @@ def HMbackground_z0_sternberg(nu=None,maxvu=200.0,num=10000):
     J[w] *= 1.051E2 * nu[w]**-1.5
     return J, nu*nu0
 
-def HMbackground(elID,redshift=3.0, HMversion='12', alpha_UV=0):
-    Jnu, nu, discretised_z = _HM_background_impl(elID, redshift, HMversion, alpha_UV)
-    logger.log("info", "Using HM{1:s} background at z={0:f}".format(discretised_z, HMversion))
+def HMbackground(elID,redshift=3.0, version='12', alpha_UV=0):
+    Jnu, nu, discretised_z = _HM_background_impl(elID, redshift, version, alpha_UV)
+    logger.log("info", "Using HM{1:s} background at z={0:f}".format(discretised_z, version))
     return Jnu, nu
 
-def _HM_background_impl(elID,redshift, HMversion, alpha_UV):
+def _HM_background_impl(elID,redshift, version, alpha_UV):
     const = constants.get()
     planck  = const["planck"]
     elvolt  = const["elvolt"]
-    if HMversion == '12':
+    if version in {'12', '15'}:
         usecols = tuple(range(60))
-    elif HMversion == '05':
+    elif version == '05':
         usecols = tuple(range(50))
-    data = np.loadtxt(os.path.join(os.path.dirname(__file__), "data/radfields/HM{:s}_UVB.dat").format(HMversion), usecols=usecols)
+    data = np.loadtxt(os.path.join(os.path.dirname(__file__), "data/radfields/HM{:s}_UVB.dat").format(version), usecols=usecols)
     rdshlist = data[0,:]
     amin = np.argmin(np.abs(rdshlist-redshift))
     waveAt, Jnut = data[1:,0], data[1:,amin+1]
@@ -109,12 +109,16 @@ def _HM_background_impl(elID,redshift, HMversion, alpha_UV):
         logJ[rge0] = logJ[rge0] + alpha_UV * np.log10(egyt[rge0] / e0)
         logJ[rge1] = logJ[rge1] + alpha_UV * np.log10(e1 / e0)
         Jnut = 10**logJ
+
+    #plt.figure()
+    #plt.plot(np.log10(nut), np.log10(Jnut))
+    #plt.show()
     
     return Jnut, nut, rdshlist[amin]
 
-def HM_fiducial(elID,redshift, HMversion):
-    return _HM_background_impl(elID, redshift, HMversion, 0.0)[0]
-    #return np.loadtxt(os.path.join(os.path.dirname(__file__), "data/radfields/fiducial_j0_hm{:s}.dat").format(HMversion), usecols=1)
+def HM_fiducial(elID,redshift, version):
+    return _HM_background_impl(elID, redshift, version, 0.0)[0]
+    #return np.loadtxt(os.path.join(os.path.dirname(__file__), "data/radfields/fiducial_j0_hm{:s}.dat").format(version), usecols=1)
 
 def powerlaw(elID,):
     const = constants.get()

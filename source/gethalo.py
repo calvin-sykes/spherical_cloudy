@@ -311,12 +311,12 @@ def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
         # Get the Haardt & Madau background at the appropriate redshift
         version = options["UVB"]["spectrum"][2:4] # HM12 or HM05
         slope   = options["UVB"]["slope"]         # shape parameter alpha_UV (Crighton et al 2015, https://arxiv.org/pdf/1406.4239.pdf)
-        jzero, nuzero = radfields.HMbackground(elID,redshift=redshift, HMversion=version, alpha_UV=slope)
+        jzero, nuzero = radfields.HMbackground(elID,redshift=redshift, version=version, alpha_UV=slope)
         jzero *= options["UVB"]["scale"]
     elif options["UVB"]["spectrum"][0:2] == "PL":
         jzero, nuzero = radfields.powerlaw(elID)
     else:
-        logger.log("CRITICAL", "The radiation field {0:s} is not implemented yet".format(options["radfield"]))
+        logger.log("CRITICAL", "The radiation field '{0:s}' is not implemented yet".format(options["UVB"]["spectrum"]))
         sys.exit()
 
     # convert to an energy
@@ -1044,14 +1044,15 @@ def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
     if geom in {"NFW", "Burkert", "Cored"}:
         save_pressure = kB * densitynH * prof_temperature / masspp # want pressure in physical units
         mstring = mangle_string("{0:3.2f}".format(np.log10(hmodel.mvir / somtog)))
+        cstring = mangle_string("{0:3.2f}".format(hmodel.rvir / hmodel.rscale))
         rstring = mangle_string("{0:3.2f}".format(redshift))
         bstring = mangle_string("{0:+3.2f}".format(np.log10(hmodel.baryfrac)))
         if options["UVB"]["spectrum"][0:2] =="HM":
             hstring = mangle_string("HMscale{0:+3.2f}".format(np.log10(options["UVB"]["scale"])))
         elif options["UVB"]["spectrum"][0:2]=="PL":
             hstring = options["UVB"]["spectrum"]
-        outfname = out_dir + ("{0:s}_mass{1:s}_redshift{2:s}_baryscl{3:s}_{4:s}_{5:d}-{6:d}"
-                              .format(geom,mstring,rstring,bstring,hstring,npts,nummu))
+        outfname = out_dir + ("{0:s}_mass{1:s}_concentration{2:s}_redshift{3:s}_baryscl{4:s}_{5:s}_{6:d}-{7:d}"
+                              .format(geom,mstring,cstring,rstring,bstring,hstring,npts,nummu))
         logger.log("info", "Saving file {0:s}.npy".format(outfname))
         tmpout = np.concatenate((radius.reshape((npts,1)) * cmtopc,
                                  prof_temperature.reshape((npts,1)),
@@ -1119,7 +1120,7 @@ def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
         pool.join()
 
     # Stop the program if a large H I column density has already been reached
-    #if np.max(np.log10(prof_coldens[elID["H I"].id])) > MAX_COL_DENS:
+    #if np.max(np.log10(prof_coldens[elID["H I"].id])) > 22.0:
     #    print "Terminating after maximum N(H I) has been reached"
     #    sys.exit()
 
