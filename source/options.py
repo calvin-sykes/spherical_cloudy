@@ -9,7 +9,7 @@ import logger
 
 # What types each setting should be
 option_types = collections.defaultdict(lambda: int) # default to integer type
-for str_opt in ['geometry:profile', 'UVB:spectrum', 'phys:temp_method', 'run:outdir', 'run:resume', 'log:level', 'log:file',
+for str_opt in ['geometry:profile', 'geometry:concrel', 'UVB:spectrum', 'phys:temp_method', 'run:outdir', 'run:resume', 'log:level', 'log:file',
                 'grid:virialm', 'grid:redshift', 'grid:baryscale', 'grid:radscale', 'grid:pp_cdens', 'grid:pp_dens']:
     option_types[str_opt] = str
 for flt_opt in ['geometry:scale', 'geometry:acore', 'UVB:scale', 'UVB:slope', 'run:concrit', 'phys:gastemp', 'phys:metals', 'phys:bturb',
@@ -59,6 +59,7 @@ def default(save=False):
     # Set the geometry
     geompar = dict({})
     geompar['profile' ] = 'NFW'         # Which geometry should be used
+    geompar['concrel' ] = 'Prada'       # Which mass-concentration relation should be used
     geompar['scale'   ] = 100           # Outer radius in units of R_vir
     geompar['acore'   ] = 0.5           # Ratio of core radius to virial radius (Cored density profile only)
     options['geometry'] = geompar

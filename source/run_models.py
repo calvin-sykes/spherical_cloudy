@@ -119,8 +119,6 @@ def run_grid(opt, cosmopar, ions, dryrun=False):
     hztos  = const['hztos' ]
     Gcons  = const['Gcons' ]
     somtog = const['somtog']
-    hubpar = cosmo.hubblepar(redshift, cosmopar)
-    rhocrit = 3.0*(hubpar*hztos)**2/(8.0*np.pi*Gcons)
     
     while models:
         i, j, k, l = models.pop()
@@ -132,7 +130,15 @@ def run_grid(opt, cosmopar, ions, dryrun=False):
         logger.log('info', " UVB scale {2:.2f}    ({0:d}/{1:d})".format(i+1,numHMscl, HMscale[i]))
         logger.log('info', "###########################")
         logger.log('info', "###########################")
-        concentration = cosmo.massconc_Prada12(10**virialm[l], cosmopar, redshift[k])
+        if opt['geometry']['concrel'] == "Prada":
+            concentration = cosmo.massconc_Prada12(10**virialm[l], cosmopar, redshift[k])
+        elif opt['geometry']['concrel'] == "Eagle":
+            concentration = cosmo.massconc_Eagle(10**virialm[l], redshift[k])
+        else:
+            raise ValueError("Unknown concentration relation")
+
+        hubpar = cosmo.hubblepar(redshift[k], cosmopar)
+        rhocrit = 3.0*(hubpar*hztos)**2/(8.0*np.pi*Gcons)
         model = halomodel.make_halo(opt['geometry']['profile'],
                                     10**virialm[l] * somtog,
                                     baryfrac[l] * baryscale[j],
