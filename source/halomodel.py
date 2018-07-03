@@ -14,6 +14,7 @@ class HaloModel:
     def fm(self, x):
         raise NotImplementedError("fm is not defined for base class")
 
+
 class NFWHalo(HaloModel):
     def __init__(self, virial_mass, baryon_frac, rho_crit, conc, **kwargs):
         HaloModel.__init__(self, virial_mass, baryon_frac, rho_crit, conc)
@@ -21,6 +22,7 @@ class NFWHalo(HaloModel):
 
     def fm(self, x):
         return 3.0 * (np.log(1.0 + x) - x / (1.0 + x))
+
 
 class BurkertHalo(HaloModel):
     def __init__(self, virial_mass, baryon_frac, rho_crit, conc, **kwargs):
@@ -44,15 +46,17 @@ class CoredHalo(HaloModel):
 
 
 class PPHalo(HaloModel):
-    def __init__(self, depth, dens):
-        self.depth = depth
+    def __init__(self, coldens, dens):
+        self.cden = coldens
         self.density = dens
         self.name = 'PP'
+
 
 func_map = {'NFW'     : NFWHalo,
             'Burkert' : BurkertHalo,
             'Cored'   : CoredHalo,
             'PP'      : PPHalo }
+
 
 def make_halo(name, *args, **kwargs):
     try:

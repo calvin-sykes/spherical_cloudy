@@ -1,3 +1,5 @@
+#from __future__ import print_function, division
+
 import numpy as np
 from matplotlib import pyplot as plt
 import matplotlib.colors as mcolors
@@ -16,14 +18,13 @@ import misc
 import eagle_coolfunc
 import cython_fns
 import logger
+from scipy.integrate import trapz as spTrapz, cumtrapz as spCumTrapz
 
 import time
 import signal
 import sys
-from multiprocessing import cpu_count as mpCPUCount
-from multiprocessing import Pool as mpPool
+from multiprocessing import cpu_count as mpCPUCount, Pool as mpPool
 from multiprocessing.pool import ApplyResult
-import astropy.units as u
 from astropy.cosmology import FlatLambdaCDM
 from scipy.optimize import curve_fit as spCurveFit
 
@@ -62,6 +63,21 @@ Recompute the photoionization rates for H I, He I, and He II.
 and so forth...
 """
 
+def s(x, a, b):
+    return 0.5 + 0.5 * np.tanh((x - a) / b)
+
+
+def blendfxgx(f, g, xover, smooth):
+    assert len(f) == len(g), (len(f), len(g))
+    x = np.arange(len(f))
+    if xover < smooth:
+        xover += smooth
+    elif xover + smooth > len(x):
+        xover -= smooth
+    smooth = s(x, xover, smooth)
+    return smooth * f + (1 - smooth) * g
+
+
 def sigmoid(x, A, B, x0, s):
     return A + B * np.tanh((x0 - x) / s)
 
@@ -84,6 +100,7 @@ def mpcoldens(j, prof, radius, nummu, geom):
     else:
         logger.log("critical", "Geometry {0:s} is not allowed".format(geom))
         sys.exit(1)
+    return
 
 
 def mpphion(j, jnurarr, phelxs, nuzero, planck):
@@ -136,12 +153,54 @@ def mangle_string(str):
     return str.replace(".","d").replace("+","p").replace("-","m")
 
 
+class LivePlot:
+    
+    def __init__(self):
+        plt.ion()
+        self.figures = dict({})
+
+    #def add_figure(self, name):
+    #    self.figures[name] = plt.figure()
+    
+    def draw(self, name, cmds):
+        try:
+            fig = self.figures[name]
+        except KeyError:
+            fig = plt.figure()
+            self.figures[name] = fig
+        fig.clear()
+        cmds(fig.gca())
+            
+    def show(self):
+        if len(self.figures):
+            for fig in self.figures.itervalues():
+                fig.canvas.draw_idle()
+                fig.show()
+            plt.pause(0.01)
+        else:
+            logger.log('warning', "No live figures to show")
+
+    def close(self):
+        for name in list(self.figures.iterkeys()):
+            plt.close(self.figures[name])
+            del self.figures[name]
+        plt.ioff()
+
+
 def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
              ions=["H I", "He I", "He II"], prevfile=None, options=None):
     """
+    hmodel    : The halo model which defines the geometry
+    redshift  : The redshift to evaluate the UVB at
     cosmopar  : Set the cosmology of the simulation (hubble constant/100 km/s/Mpc, Omega_B, Omega_L, Omega_M)
     ions      : A list of ions to consider
+    prevfile  : A filename for a previous run's output to load as an initial solution
+    options   : The options dictionary which contains all the parameters/settings for the model
     """
+
+    # disable logging if running models in parallel
+    if options["run"]["pp_para"]:
+        logger.disable()
 
     bturb   = options['phys']['bturb'  ]
     gastemp = options['phys']['gastemp']
@@ -164,7 +223,14 @@ def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
     ncpus   = options["run"]["ncpus"  ]
     do_ref  = options["run"]["do_ref" ]
     do_smth = options["run"]["do_smth"]
+    lv_plot = options["run"]["lv_plot"]
     refine  = options["run"]["refine" ]
+
+    # What quantities should be output
+    svrates = options["save"]["rates"    ] # ionisation rates
+    svrcmb  = options["save"]["recomb"   ] # recombination rates
+    svhtcl  = options["save"]["heat_cool"] # heating + cooling rates
+    svjnu   = options["save"]["intensity"] # mean intensity
 
     # Method used to define the radial coordinate
     # depends on whether we are refining a model
@@ -187,9 +253,9 @@ def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
     geom = options["geometry"]["profile"]
     geomscale = options["geometry"]["scale"]
 
-    # slab thickness and constant H volume density for plane parallel models
+    # min and max column density, and constant H volume density for plane parallel models
     if geom == 'PP':
-        PP_depth = hmodel.depth
+        PP_cden  = hmodel.cden
         PP_dens  = hmodel.density
 
     # boundary condition to use
@@ -199,11 +265,11 @@ def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
     temp_method = options["phys"]["temp_method"]
     
     # Set up the cosmology
-    cosmoVal = FlatLambdaCDM(H0=100.0*cosmopar[0] * u.km / u.s / u.Mpc, Om0=cosmopar[3])
-    hubb_time = cosmoVal.age(redshift).to(u.s).value
+    cosmoVal = FlatLambdaCDM(H0=100.0*cosmopar[0], Om0=cosmopar[3])
+    hubb_time = cosmoVal.age(redshift).value * (365.25 * 86400 * 1.0E9)
 
     # Get the element ID numbers
-    elID, extions = elemids.getids(ions,metals)
+    elID = elemids.getids(ions,metals,Hescale)
 
     # How many ions do we need to calculate
     nions = len(ions)
@@ -213,6 +279,9 @@ def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
     if ncpus <= 0: ncpus = 1
     logger.log("info", "Using {0:d} CPUs".format(int(ncpus)))
 
+    if lv_plot:
+        live_plot = LivePlot()
+
     # make multiprocessing pool if using >1 CPUs
     # the reassignment of SIGINT is needed to make Ctrl-C work while the process pool is active
     if ncpus > 1:
@@ -221,10 +290,11 @@ def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
         signal.signal(signal.SIGINT, sigint_handler)
 
     # Get the primordial number abundance of He relative to H
+    # (Scaling has been moved to elemids.py)
     if "He I" in ions:
-        prim_He = elID["He I"].abund * Hescale
+        prim_He = elID["He I"].abund
     elif "He II" in ions:
-        prim_He = elID["He II"].abund * Hescale
+        prim_He = elID["He II"].abund
     else:
         logger.log("CRITICAL", "You must include ""He I"" and ""He II"" in your model")
         sys.exit(1)
@@ -237,14 +307,14 @@ def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
         # Get the Haardt & Madau background at the appropriate redshift
         version = options["UVB"]["spectrum"][2:4] # HM12 or HM05
         slope   = options["UVB"]["slope"]         # shape parameter alpha_UV (Crighton et al 2015, https://arxiv.org/pdf/1406.4239.pdf)
-        jzero, nuzero = radfields.HMbackground(elID,redshift=redshift, HMversion=version, alpha_UV=slope)
+        jzero, nuzero = radfields.HMbackground(elID,redshift=redshift, version=version, alpha_UV=slope)
         jzero *= options["UVB"]["scale"]
     elif options["UVB"]["spectrum"][0:2] == "PL":
         jzero, nuzero = radfields.powerlaw(elID)
     else:
-        logger.log("CRITICAL", "The radiation field {0:s} is not implemented yet".format(options["radfield"]))
+        logger.log("CRITICAL", "The radiation field '{0:s}' is not implemented yet".format(options["UVB"]["spectrum"]))
         sys.exit()
-    
+
     # convert to an energy
     engy = planck * nuzero / elvolt
 
@@ -255,7 +325,19 @@ def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
     for j in range(nions):
         xsecv = phionxsec.rate_function_arr(engy,phelxsdata[ions[j]])
         phelxs[j] = xsecv.copy()
-    
+
+    # If the slope of the UVB has been changed, renormalise it so that the hydrogen photoionisation rate
+    # stays the same as for the fiducial/flat H&M UVB
+    if slope != 0:
+        flat_jzero = radfields.HM_fiducial(elID, redshift, version)
+        flat_jzero *= options["UVB"]["scale"]
+        flat_gamma = 4 * np.pi * spTrapz(flat_jzero / (planck * nuzero) * phelxs[elID["H I"].id], nuzero)
+        temp_gamma = 4 * np.pi * spTrapz(jzero / (planck * nuzero) * phelxs[elID["H I"].id], nuzero)
+        rescale_factor = temp_gamma / flat_gamma
+        jzero /= rescale_factor
+        #new_gamma = 4 * np.pi * spTrapz(jzero / (planck * nuzero) * phelxs[elID["H I"].id], nuzero)
+        #assert np.allclose(flat_gamma, new_gamma)
+
     logger.log("debug", "Loading radiative recombination coefficients")
     rrecombrate = recomb.load_data_radi(elID)
 
@@ -264,11 +346,13 @@ def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
     drecombelems = drecombrate.keys()
 
     logger.log("debug",  "Loading collisional ionization rate coefficients")
-    usecolion = "Dere2007"
+    usecolion = "Chianti"
     if usecolion == "Dere2007":
-        colionrate = colioniz.load_data(elID, rates="Dere2007")
+        colioncoeff = colioniz.load_data(elID, rates="Dere2007")
     elif usecolion == "Voronov1997":
-        colionrate = colioniz.load_data(elID, rates="Voronov1997")
+        colioncoeff = colioniz.load_data(elID, rates="Voronov1997")
+    elif usecolion == "Chianti":
+        colioncoeff, coliontemp = colioniz.load_data(elID, rates="Chianti")
     else:
         logger.log("error", "Cannot load collisional ionization rates")
 
@@ -282,7 +366,7 @@ def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
     if temp_method == 'eagle':
         logger.log("info", "Using Eagle cooling function")
         cf_interp = eagle_coolfunc.load_eagle_cf(prim_He)
-    elif temp_method == 'relhic':
+    elif temp_method in {'relhic', 'blend'}:
         logger.log("info", "Using RELHIC nH-T relation")
         relhic_interp = eagle_coolfunc.load_relhic_nHT()
 
@@ -330,9 +414,10 @@ def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
             temp_densitynH = np.interp(radius, old_radius, tdata[:,2])
             for j in range(nions):
                 prof_density[j] = np.interp(radius, old_radius, tdata[:,arridx["voldens"][ions[j]]])
-                #prof_density[j] = 10**remove_discontinuity(np.log10(prof_density[j]))
-                Yprofs[j] = prof_density[j] / (temp_densitynH * elID[ions[j]].abund)
-                #Yprofs[j] = remove_discontinuity(Yprofs[j])
+                if elID[ions[j]].abund > 0.0:
+                    Yprofs[j] = prof_density[j] / (temp_densitynH * elID[ions[j]].abund)
+                else:
+                    Yprofs[j] = prof_density[j] * 0.0
 
             prof_phionrate = np.zeros((nions,npts))
             densitym  = temp_densitynH * protmss * (1.0 + 4.0*prim_He)
@@ -354,7 +439,8 @@ def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
             prof_coldens = np.zeros((nions,npts,nummu))
             prof_density = 1.0E-1*np.ones((nions,npts))
         elif geom == "PP":
-            radius  = np.linspace(0.0, PP_depth, npts)
+            depth = PP_cden / PP_dens
+            radius = np.linspace(0, depth, npts)
             densitynH = np.ones(npts) * PP_dens
             prof_coldens = np.zeros((nions,npts))
             prof_density = 1.0E-1*np.ones((nions,npts))
@@ -387,12 +473,14 @@ def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
     istore = 0
     store_Yprofs = np.zeros(Yprofs.shape + (nstore,))
 
+    store_temps = np.zeros(prof_temperature.shape + (nstore,))
+
     # Set the stopping criteria flags
     tstcrit  = np.zeros(nions,dtype=np.int)
     iteration = 0
     old_Yprofs = None
 
-    extra_plots = False
+    # BEGIN MAIN LOOP
     while (not np.array_equal(tstcrit,allionpnt)) or (iteration <= miniter):
         iteration += 1
         logger.log("info", "Iteration number: {0:d}".format(iteration))
@@ -401,6 +489,10 @@ def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
 
         # Store the old Yprofs
         store_Yprofs[:,:,istore] = Yprofs.copy()
+
+        # Store the old temperature profile
+        store_temps[:,istore] = prof_temperature.copy()
+
         istore += 1
         if istore >= nstore:
             istore = 0
@@ -443,7 +535,7 @@ def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
             prof_density[j] = Yprofs[j] * densitynH * elID[ions[j]].abund
 
         # Compute the electron density
-        electrondensity = densitynH * ( (1.0-Yprofs[elID["H I"].id]) + prim_He*Yprofs[elID["He II"].id] + 2.0*prim_He*(1.0-Yprofs[elID["He I"].id]-Yprofs[elID["He II"].id]) )
+        electrondensity = densitynH * ((1.0 - Yprofs[elID["H I"].id]) + prim_He * (Yprofs[elID["He II"].id] + 2.0 * (1.0 - Yprofs[elID["He I"].id] - Yprofs[elID["He II"].id])))
         
         # Calculate the column density arrays,
         if ncpus == 1:
@@ -478,12 +570,12 @@ def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
         logger.log("debug", "Calculating phionization rates")
         if ncpus == 1:
             for j in range(nions):
-                phionr = 4.0*np.pi * cython_fns.phionrate(jnurarr, phelxs[j], nuzero, planck*1.0E7)
+                phionr = 4.0*np.pi * cython_fns.phionrate(jnurarr, phelxs[j], nuzero, planck)
                 prof_phionrate[j] = phionr.copy()
         else:
             async_results = []
             for j in range(nions):
-                async_results.append(pool.apply_async(mpphion, (j, jnurarr, phelxs[j], nuzero, planck*1.0E7)))
+                async_results.append(pool.apply_async(mpphion, (j, jnurarr, phelxs[j], nuzero, planck)))
             map(ApplyResult.wait, async_results)
             for j in range(nions):
                 getVal = async_results[j].get()
@@ -493,10 +585,17 @@ def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
         prof_colion = np.zeros((nions,npts))
         for j in range(nions):
             if usecolion == "Dere2007":
-                ratev = colioniz.rate_function_Dere2007(1.0E-7*prof_temperature*kB/elvolt, colionrate[ions[j]])
+                ratev = colioniz.rate_function_Dere2007(prof_temperature*kB/elvolt, colioncoeff[ions[j]])
             elif usecolion == "Voronov1997":
-                ratev = colioniz.rate_function_arr(1.0E-7*prof_temperature*kB/elvolt, colionrate[ions[j]])
+                ratev = colioniz.rate_function_arr(prof_temperature*kB/elvolt, colioncoeff[ions[j]])
+            elif usecolion == "Chianti":
+                ratev = colioniz.rate_function_Chianti(prof_temperature*kB/elvolt, colioncoeff[ions[j]], coliontemp)
             prof_colion[j] = ratev.copy()
+
+        # Calculate collisional ionisation rates
+        prof_colionrate = np.zeros((nions,npts))
+        for j in range(nions):
+            prof_colionrate[j] = prof_colion[j] * electrondensity# * prof_density[j]
 
         # the secondary photoelectron collisional ionization rates (probably not important for metals -- Section II, Shull & van Steenberg (1985))
         logger.log("debug", "Integrate over frequency to get secondary photoelectron ionization")
@@ -543,6 +642,7 @@ def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
 
         # Calculate other forms of ionization (e.g. photons from H and He recombinations)
         logger.log("debug", "Calculate ionization rate from recombinations of H+, He+, He++")
+        
         prof_other = np.zeros((nions,npts))
         for j in range(nions):
             ratev = photoion.other(ions[j],engy,prof_density,densitynH,Yprofs,electrondensity,phelxs,prof_temperature,elID,kB,elvolt)
@@ -567,7 +667,7 @@ def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
                 prof_chrgtraniHeII[j] = ratev.copy()
 
         # Total all of the ionization rates
-        prof_gamma = prof_phionrate + prof_scdryrate + HIIdensity*prof_chrgtraniHII + HeIIdensity*prof_chrgtraniHeII + prof_other + prof_colion
+        prof_gamma = prof_phionrate + prof_scdryrate + HIIdensity*prof_chrgtraniHII + HeIIdensity*prof_chrgtraniHeII + prof_other + prof_colionrate
 
         logger.log("debug", "Calculating recombination rates")
         prof_recomb = np.zeros((nions,npts))
@@ -575,7 +675,8 @@ def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
         prof_recombCTHeI = np.zeros((nions,npts))
         for j in range(nions):
             ratev = recomb.rate_function_radi_arr(prof_temperature, rrecombrate[ions[j]])
-            if ions[j] in drecombelems: ratev += recomb.rate_function_diel_arr(prof_temperature, drecombrate[ions[j]])
+            if ions[j] in drecombelems:
+                ratev += recomb.rate_function_diel_arr(prof_temperature, drecombrate[ions[j]])
             prof_recomb[j] = ratev.copy()
             #ratev = chrgtran.HI_target(ions[j],prof_temperature)
             if ions[j] in chrgtran_HItargs:
@@ -600,30 +701,15 @@ def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
         tmp_Yprofs = Yprofs.copy()
         inneriter = 0
 
-        if iteration > 42:
-            extra_plots = True
-
-        #plt.figure()
-        #plt.plot(Yprofs[0])
-        #plt.show()
-        #
-        #plt.figure()
-        #plt.plot(np.log10(prof_rates[elID["H I"].id]))
-        #plt.show()
-
         ## BEGIN INNER ITERATION
         while True:
-            if False and extra_plots:
-                print('RATES')
-                plt.figure()
-                plt.plot(np.log10(prof_rates[elID["H I"].id]))
-                plt.show()
-
             # Calculate the Yprofs
             Yprofs = misc.calc_yprofs(ions,prof_rates,elID)
 
             # Test if the profiles have converged
-            tstconv = ( (np.abs((tmp_Yprofs-Yprofs)/Yprofs)<concrit**2)|(Yprofs==0.0)).astype(np.int).sum(axis=1)
+            tstconv_x = (np.abs((tmp_Yprofs-Yprofs)/Yprofs)<concrit**2)|(Yprofs==0.0)
+            tstconv_1mx = (np.abs(((1-tmp_Yprofs)-(1-Yprofs))/(1-Yprofs))<concrit**2)|((1-Yprofs)==0.0)
+            tstconv = np.logical_and(tstconv_x, tstconv_1mx).astype(np.int).sum(axis=1)
             
             # Reset ne and the rates
             electrondensity = densitynH * ( (1.0-Yprofs[elID["H I"].id]) + prim_He*Yprofs[elID["He II"].id] + 2.0*prim_He*(1.0-Yprofs[elID["He I"].id]-Yprofs[elID["He II"].id]) )
@@ -669,19 +755,27 @@ def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
                         prof_scdryrate[j] = ratev.copy()
 
             # Colion
+            prof_colion = np.zeros((nions,npts))
             for j in range(nions):
                 if usecolion == "Dere2007":
-                    ratev = colioniz.rate_function_Dere2007(1.0E-7*prof_temperature*kB/elvolt, colionrate[ions[j]])
+                    ratev = colioniz.rate_function_Dere2007(prof_temperature*kB/elvolt, colioncoeff[ions[j]])
                 elif usecolion == "Voronov1997":
-                    ratev = colioniz.rate_function_arr(1.0E-7*prof_temperature*kB/elvolt, colionrate[ions[j]])
+                    ratev = colioniz.rate_function_arr(prof_temperature*kB/elvolt, colioncoeff[ions[j]])
+                elif usecolion == "Chianti":
+                    ratev = colioniz.rate_function_Chianti(prof_temperature*kB/elvolt, colioncoeff[ions[j]], coliontemp)
                 prof_colion[j] = ratev.copy()
+
+            # Calculate collisional ionisation rates
+            prof_colionrate = np.zeros((nions,npts))
+            for j in range(nions):
+                prof_colionrate[j] = prof_colion[j] * electrondensity
 
             # Other
             for j in range(nions):
                 ratev = photoion.other(ions[j],engy,prof_density,densitynH,Yprofs,electrondensity,phelxs,prof_temperature,elID,kB,elvolt)
                 prof_other[j] = ratev.copy()
 
-            prof_gamma = prof_phionrate + prof_scdryrate + HIIdensity*prof_chrgtraniHII + HeIIdensity*prof_chrgtraniHeII + prof_other + prof_colion
+            prof_gamma = prof_phionrate + prof_scdryrate + HIIdensity*prof_chrgtraniHII + HeIIdensity*prof_chrgtraniHeII + prof_other + prof_colionrate
 
             # density of this specie = unionized fraction * H volume density * number abundance relative to H
             HIdensity  = Yprofs[elID["H I"].id]  * densitynH * elID["H I"].abund
@@ -704,40 +798,30 @@ def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
         logger.log("info", "Inner iteration cycled {0:d} times".format(inneriter))
         ## END INNER ITERATION
 
-        if False and extra_plots:
-            print('GAMMA')
-            plt.figure()
-            plt.plot(np.log10(radius * cmtopc), np.log10(prof_phionrate[0]), label='phion')
-            plt.plot(np.log10(radius * cmtopc), np.log10(prof_scdryrate[0]), label='scdry')
-            plt.plot(np.log10(radius * cmtopc), np.log10(prof_other[0]), label='other')
-            plt.plot(np.log10(radius * cmtopc), np.log10(prof_colion[0]), label='colion')
-            plt.plot(np.log10(radius * cmtopc), np.log10(prof_gamma[0]), label = 'total')
-            plt.legend()
-            plt.show()
-            #
-            #print('ALPHA')
-            #plt.figure()
-            #plt.plot(np.log10(radius * cmtopc), np.log10(prof_alpha[0]))
-            #plt.show()
-            #
-            #print('YPROFS')
-            #plt.figure()
-            ##plt.plot(np.log10(radius * cmtopc), np.log10(prof_rates[0]/np.max(prof_rates[0])))
-            #plt.plot(np.log10(radius * cmtopc), Yprofs[0])
-            #plt.show()        
+        if lv_plot:
+            def plot_rates(ax):
+                ax.plot(np.log10(prof_temperature), np.log10(prof_phionrate[0]), label='phion')
+                ax.plot(np.log10(prof_temperature), np.log10(prof_scdryrate[0]), label='scdry')
+                ax.plot(np.log10(prof_temperature), np.log10(prof_colionrate[0]), label='colion')
+                ax.plot(np.log10(prof_temperature), np.log10(prof_other[0]), label='other')
+                ax.plot(np.log10(prof_temperature), np.log10(HIIdensity[0] * prof_chrgtraniHII[0]), label='CT HII')
+                ax.plot(np.log10(prof_temperature), np.log10(HeIIdensity[0] * prof_chrgtraniHeII[0]), label='CT HeII')
+                ax.legend()
+                ax.annotate('iteration={}'.format(iteration), xy=(0.8, 0.2), xycoords='axes fraction')
+            live_plot.draw('rates', plot_rates)
 
-        # If the tabulated Eagle cooling function is used, there's no need to calculate any rates
-        if temp_method not in {'eagle', 'relhic'}:
+        # If a tabulated cooling function is used, there's no need to calculate any rates
+        if temp_method not in {'eagle', 'relhic', 'isothermal'}: #or (temp_method =='blend' and np.any(densitynH > 10**-4.8)):
             logger.log("debug", "Calculating heating rate")
             # Construct an array of ionization energies and the corresponding array for the indices
             ionlvl = np.zeros(nions,dtype=np.float)
             for j in range(nions):
-                ionlvl[j] = elID[ions[j]].ip*elvolt/planck
+                ionlvl[j] = elID[ions[j]].ip * elvolt / planck
                 # Photoionization heating
-                prof_eps  = 4.0*np.pi * cython_fns.phheatrate_allion(jnurarr, phelxs, nuzero, ionlvl, planck)
+                prof_eps  = 4.0 * np.pi * cython_fns.phheatrate_allion(jnurarr, phelxs, nuzero, ionlvl, planck)
                 prof_phionheatrate = np.zeros(npts,dtype=np.float)
             for j in range(nions):
-                prof_phionheatrate += prof_eps[j]*densitynH*elID[ions[j]].abund*Yprofs[j]
+                prof_phionheatrate += prof_eps[j] * densitynH * elID[ions[j]].abund * Yprofs[j]
             # Secondary electron photoheating rate (Shull & van Steenberg 1985)
             heat_HI  = 4.0*np.pi * cython_fns.scdryheatrate(jnurarr,nuzero,phelxs[elID["H I"].id],electrondensity/(densitynH*(1.0+2.0*prim_He)), elID["H I"].ip, elID["D I"].ip, elID["He I"].ip, planck, elvolt, 0)
             heat_HeI = 4.0*np.pi * cython_fns.scdryheatrate(jnurarr,nuzero,phelxs[elID["He I"].id],electrondensity/(densitynH*(1.0+2.0*prim_He)), elID["H I"].ip, elID["D I"].ip, elID["He I"].ip, planck, elvolt, 2)
@@ -754,30 +838,25 @@ def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
         old_temperature = prof_temperature.copy()
         
         if temp_method == 'original':
-            prof_temperature = cython_fns.thermal_equilibrium_full(total_heat, total_cool, old_temperature)
+            prof_temperature, actual_cool = cython_fns.thermal_equilibrium_full(total_heat, total_cool, old_temperature)
 
         elif temp_method == 'eagle':
-            # hack: force density to maximum value that is tabulated
-            # for purpose of finding temperature
-            #clamped_dens = np.where(densitynH >= 1.0, 1.0, densitynH)
-            clamped_dens = densitynH ## TESTING
-
             # Generate a range of temperature values the code is allowed to use
             temp = np.logspace(3, 4.6, 5000)
             
             # Interpolate the cooling function to find cooling rates at each density as a fn of temperature
             # interp2d returns values in _sorted_ order of the inputs, which is bad
             # the following trick allows the correct order to be reconstructed
-            order = np.argsort(clamped_dens)
+            order = np.argsort(densitynH)
             recovery_order = np.argsort(order)
             #try:
-            #assert np.unique(clamped_dens[order]).all()
+            #assert np.unique(densitynH[order]).all()
             #assert np.unique(temp).all()
-            rates = np.abs(cf_interp(clamped_dens[order], temp, assume_sorted=True))[:,recovery_order]
+            rates = np.abs(cf_interp(densitynH[order], temp, assume_sorted=True))[:,recovery_order]
             #except ValueError:
-            #    print(clamped_dens[order], temp)
+            #    print(densitynH[order], temp)
 
-            grddens, grdtemp = np.meshgrid(clamped_dens, temp)
+            grddens, grdtemp = np.meshgrid(densitynH, temp)
             grdmdens = grddens * protmss * (1 + 4 * prim_He)
             rates_adiabatic = (1.5 * kB * grdtemp * protmss) / (masspp * grdmdens * (1 - prim_He)**2 * hubb_time)
 
@@ -789,64 +868,61 @@ def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
             prof_temperature = temp[loc_adiabatic]
 
         elif temp_method == 'relhic':
-            # hack: force density to maximum value that is tabulated
-            # for purpose of finding temperature
-            #clamped_dens = np.where(densitynH >= 1.0, 1.0, densitynH)
-            clamped_dens = densitynH ## TESTING
+            prof_temperature = relhic_interp(densitynH)
 
-            prof_temperature = relhic_interp(clamped_dens)
+        elif temp_method == 'blend':
+            # below threshold 10**-4.8/cm^3, use the adiabatic result
+            # above it, calculate thermal equilibrium
+            # use tanh blending function to get smooth transition
+            ad_temp = relhic_interp(densitynH)
 
-        elif temp_method == 'equilibrium':
-            # Generate a range of temperature values the code is allowed to use
-            temp = np.logspace(3, 6, 1000)
-            # Equilibrium is achieved when absolute value of net rate is minimised
-            loc_eqbm = np.argmin(np.abs(total_heat[:, np.newaxis] - total_cool), axis=1)
-            prof_temperature = temp[loc_eqbm]
+            #print(hubb_time)
+            #raw_input()
+            my_ad_temp = hubb_time * (total_heat / (1.5 * densitynH * kB))
 
-        elif temp_method == 'adiabatic':
-            # difference of normalised rates as per Appendix B, Theuns+ 98
-            net_rate = np.abs(total_heat[:, np.newaxis] - total_cool) / densitynH[:, np.newaxis]**2
+            if lv_plot:
+                def plot_ad_comp(ax):
+                    order = np.argsort(densitynH)
+                    ax.plot(np.log10(densitynH)[order], ad_temp[order], label='RELHIC')
+                    ax.plot(np.log10(densitynH)[order], my_ad_temp[order], label='me')
+                    ax.legend()
+                live_plot.draw('ad_comp', plot_ad_comp)
 
-            # Generate a range of temperature values the code is allowed to use
-            temp = np.logspace(3, 6, 1000)
+            #print(ad_temp, my_ad_temp)
+            #raw_input()
+            
+            eq_temp, actual_cool = cython_fns.thermal_equilibrium_full(total_heat, total_cool, old_temperature)
+            if np.any(densitynH > 10**-4.8):
+                loc = np.argmin(np.abs(densitynH - 10**-4.8))
+                prof_temperature = blendfxgx(ad_temp, eq_temp, loc, 50.0)
+                #prof_temperature = blendfxgx(my_ad_temp, eq_temp, loc, 50.0)
+            else:
+                prof_temperature = ad_temp
+                #prof_temperature = my_ad_temp
 
-            # net rates such that the cooling time equals the Hubble time
-            hubb_rates = (1.5 * kB * temp[np.newaxis, :] * protmss) / (masspp * densitym*(1-prim_He)**2*hubb_time)[:, np.newaxis]
-            ord_adiabatic = np.argsort(np.abs(net_rate - hubb_rates), axis=1)
-            prof_temperature = np.sort(temp[ord_adiabatic[:,0:5]], axis=1)[:,0]
+        elif temp_method == 'isothermal':
+            pass # gas temperature was set at beginning, leave unchanged
 
         else:
             logger.log("critical", "Undefined temperature method")
             assert 0
-        
-        if False: #iteration==1:
-            live_fig = plt.figure()
-            plt.ion()
 
-        if False: #(iteration % 1 == 0 or iteration > 100):
-            live_fig.clear()
-
-            live_ax = live_fig.gca()
-
-            # plot commands...
-            live_ax.set_xlabel('log(Radius (pc))')
-            #live_ax.set_ylabel(r'log($n_H$)')
-            live_ax.plot(np.log10(radius * cmtopc), Yprofs[elID["H I"].id])
-            live_ax.plot(np.log10(radius * cmtopc), Yprofs[elID["He I"].id])
-            live_ax.plot(np.log10(radius * cmtopc), Yprofs[elID["He II"].id])
-            #live_ax.plot(np.log10(radius * cmtopc), masspp)
-            #live_ax.plot(np.log10(densitynH), prof_temperature)
-
-            #lax2 = live_ax.twinx()
-            #lax2.scatter(np.log10(radius * cmtopc), np.log10(densitynH), s=0.1, c='r')
-
-            #live_ax.annotate('iteration {}'.format(iteration), xy=(0.8,0.8), xycoords='axes fraction')
-            #live_ax.legend()
-
-            live_fig.canvas.draw_idle()
-            live_fig.show()
-
-            plt.pause(0.01)
+        #if iteration > 10:
+        #    xvals = np.arange(iteration - 9, iteration)
+        #    yvals = []
+        #    temp_counter = istore - 1
+        #    # put ys in order of iteration count
+        #    while True:
+        #        yval = np.mean(np.abs(store_temps[:, temp_counter]
+        #                              - store_temps[:, temp_counter - 1 if temp_counter > 0 else nstore-1]))
+        #        yvals.append(yval)
+        #        temp_counter -= 1
+        #        temp_counter = temp_counter % nstore
+        #        if temp_counter == istore:
+        #           break
+        #    yvals.reverse()
+        #    
+        #    pfit = np.polyfit(xvals, yvals, 1)
 
         if np.size(np.where(prof_temperature<=1000.0001)[0]) != 0:
             logger.log("ERROR", "Profile temperature was estimated to be <= 1000 K")
@@ -854,6 +930,14 @@ def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
             logger.log("ERROR", "Try a smaller radial range, or stronger radiation field")
             wtmp = np.where((prof_temperature<=1000.0001) | np.isnan(prof_temperature))
             prof_temperature[wtmp] = 1000.0001
+
+        if lv_plot:
+            def plot_heat_cool(ax):
+                order = np.argsort(prof_temperature)
+                ax.plot(prof_temperature[order], np.log10(total_heat[order]))
+                ax.plot(prof_temperature[order], np.log10(actual_cool[order]))
+            #live_plot.draw('heat_cool', plot_heat_cool)
+
         # Now make sure that the temperature jump is small
         # The maximum allowed jump is made large at the beginning and decreases as the iteration count increases
         # This helps speed up convergence
@@ -866,9 +950,20 @@ def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
             prof_temperature = old_temperature-tmptemp
             
         if iteration >= 100 and iteration%1 == 0:
+        #if (maxiter - iteration < 30):
             logger.log("info", "Averaging the stored Yprofs")
             Yprofs = np.mean(store_Yprofs, axis=2)
             #Yprofs = uniform_filter1d(Yprofs, 5, axis=0)
+
+        if lv_plot:
+            live_plot.show()
+
+        # Unclear whether this is helpful
+        #if iteration > 10 and pfit[0] > 0:
+        #    logger.log('warning', "Backwards progress in delta temps")
+        #    logger.log('warning', "Try averaging temperature profiles")
+        #    prof_temperature = 0.5 * (prof_temperature + store_temps[:, istore - 1])
+            
         tstcrit = ( (np.abs((old_Yprofs-Yprofs)/Yprofs)<concrit)|(Yprofs==0.0)).astype(np.int).sum(axis=1)
         if np.array_equal(tstcrit,allionpnt):
             break
@@ -943,26 +1038,37 @@ def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
     Harecomb = recomb.Ha_recomb(prof_temperature)
     HIIdensity = densitynH * (1.0-Yprofs[elID["H I"].id])
     elecprot = Harecomb*electrondensity*HIIdensity
-    HaSB = (1.0/(4.0*np.pi)) * cython_fns.coldensprofile(elecprot, radius)  # photons /cm^2 / s / SR
-    HaSB = HaSB * (1.98645E-8/6563.0)/4.254517E10   # ergs /cm^2 / s / arcsec^2
+    if geom in {"NFW", "Burkert", "Cored"}:
+        HaSB = (1.0/(4.0*np.pi)) * cython_fns.coldensprofile(elecprot, radius)  # photons /cm^2 / s / SR
+    elif geom == "PP":
+        # assume emission is all in one direction (?)
+        HaSB = 2.0 * (1.0/(4.0*np.pi)) * cython_fns.calc_coldensPP(elecprot, radius)  # photons /cm^2 / s / SR
+    # Multiply by Ha energy to convert from photons/s to ergs/s
+    # Multiply by (4 * pi)/(4 * pi * (60^2 * 180/pi)^2) to convert from per SR to per arcsec^2
+    HaSB *=  (3.0e10 * planck / 6.563e-5) / (4.254517E10)
+    #HaSB = HaSB * (1.98645E-8/6563.0)/4.254517E10   # ergs /cm^2 / s / arcsec^2
 
     timeB = time.time()
     logger.log("info", "Test completed in {0:f} mins".format((timeB-timeA)/60.0))
 
     out_dir = options["run"]["outdir"]
 
+    if lv_plot:
+        live_plot.close()
+
     # Save the results        
     if geom in {"NFW", "Burkert", "Cored"}:
         save_pressure = kB * densitynH * prof_temperature / masspp # want pressure in physical units
         mstring = mangle_string("{0:3.2f}".format(np.log10(hmodel.mvir / somtog)))
+        cstring = mangle_string("{0:3.2f}".format(hmodel.rvir / hmodel.rscale))
         rstring = mangle_string("{0:3.2f}".format(redshift))
         bstring = mangle_string("{0:+3.2f}".format(np.log10(hmodel.baryfrac)))
         if options["UVB"]["spectrum"][0:2] =="HM":
             hstring = mangle_string("HMscale{0:+3.2f}".format(np.log10(options["UVB"]["scale"])))
         elif options["UVB"]["spectrum"][0:2]=="PL":
             hstring = options["UVB"]["spectrum"]
-        outfname = out_dir + ("{0:s}_mass{1:s}_redshift{2:s}_baryscl{3:s}_{4:s}_{5:d}-{6:d}"
-                              .format(geom,mstring,rstring,bstring,hstring,npts,nummu))
+        outfname = out_dir + ("{0:s}_mass{1:s}_concentration{2:s}_redshift{3:s}_baryscl{4:s}_{5:s}_{6:d}-{7:d}"
+                              .format(geom,mstring,cstring,rstring,bstring,hstring,npts,nummu))
         logger.log("info", "Saving file {0:s}.npy".format(outfname))
         tmpout = np.concatenate((radius.reshape((npts,1)) * cmtopc,
                                  prof_temperature.reshape((npts,1)),
@@ -974,25 +1080,55 @@ def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
                                  prof_coldens.T,
                                  Yprofs.T), axis=1)
     elif geom == "PP":
-        dstring = mangle_string("{0:+3.2f}".format(PP_dens))
-        rstring = mangle_string("{0:4.2f}".format(PP_depth * cmtopc / 1000))
+        dstring = mangle_string("{0:+3.2f}".format(np.log10(PP_dens)))
+        cdstring = mangle_string("{0:+3.2f}".format(np.log10(PP_cden)))
         if options["UVB"]["spectrum"][0:2] == "HM":
             hstring = mangle_string("HMscale{0:+3.2f}".format(np.log10(options["UVB"]["scale"])))
         elif options["UVB"]["spectrum"][0:2]=="PL":
             hstring = options["UVB"]["spectrum"]
-        outfname = out_dir + ("{0:s}_density{1:s}_radius{2:s}_{3:s}_{4:d}"
-                    .format(geom,dstring,rstring,hstring,npts))
+        outfname = out_dir + ("{0:s}_density{1:s}_coldens{2:s}_{3:s}_{4:d}"
+                    .format(geom,dstring,cdstring,hstring,npts))
         logger.log("info", "Saving file {0:s}.npy".format(outfname))
         tmpout = np.concatenate((radius.reshape((npts,1)) * cmtopc,
                                  prof_temperature.reshape((npts,1)),
                                  densitynH.reshape((npts,1)),
                                  electrondensity.reshape((npts,1)),
+                                 HaSB.reshape((npts,1)),
                                  prof_density.T,
-                                 prof_coldens.T), axis=1)
-        # make sure array is C-contiguous
-        #tmpout = np.require(tmpout, 'C')
-
+                                 prof_coldens.T,
+                                 Yprofs.T), axis=1)
     np.save(outfname, tmpout)
+
+    if svrates:
+        tmpout = np.concatenate((radius.reshape((npts,1)) * cmtopc,
+                                prof_phionrate.T,
+                                prof_scdryrate.T,
+                                (densitynH * (1 - Yprofs[elID["H I"].id]).reshape((1, npts)).repeat(nions, axis=0) * prof_chrgtraniHII).T,
+                                (densitynH * (prim_He * Yprofs[elID["He II"].id]).reshape((1, npts)).repeat(nions, axis=0) * prof_chrgtraniHeII).T,
+                                prof_other.T,
+                                prof_colionrate.T), axis=1)
+        np.save(outfname + '_rates', tmpout)
+
+    if svrcmb:
+        tmpout = np.concatenate((radius.reshape((npts,1)) * cmtopc,
+                                 prof_recomb.T,
+                                 prof_recombCTHI.T,
+                                 prof_recombCTHeI.T), axis=1)
+        np.save(outfname + '_recomb', tmpout)
+
+    if svhtcl:
+        tmpout = np.concatenate((radius.reshape((npts,1)) * cmtopc,
+                                 prof_temperature.reshape((npts,1)),
+                                 total_heat.reshape((npts,1)),
+                                 actual_cool.reshape((npts,1))), axis=1)
+        np.save(outfname + '_heat_cool', tmpout)
+
+    if svjnu:
+        tmpout = np.concatenate((radius.reshape((npts,1)) * cmtopc,
+                                 jnurarr.T), axis=1)
+        tmpnu = np.insert(nuzero, 0, np.nan).reshape((1, len(nuzero) + 1))
+        tmpout = np.concatenate((tmpnu, tmpout), axis=0)
+        np.save(outfname + '_intensity', tmpout)
     
     # dispose of process pool
     if ncpus > 1:
@@ -1000,7 +1136,7 @@ def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
         pool.join()
 
     # Stop the program if a large H I column density has already been reached
-    #if np.max(np.log10(prof_coldens[elID["H I"].id])) > MAX_COL_DENS:
+    #if np.max(np.log10(prof_coldens[elID["H I"].id])) > 22.0:
     #    print "Terminating after maximum N(H I) has been reached"
     #    sys.exit()
 
@@ -1012,4 +1148,3 @@ def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
         # Everything is OK
         # Return True, and the output filename to be used as the input to the next iteration    
         return (True, outfname + '.npy')
-

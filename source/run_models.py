@@ -10,11 +10,11 @@ import options
 import constants
 import cosmo
 import logger
-
+from jug import Task, is_jug_running
 
 # Check the output directory exists, create it if not
 def init_outdir(options):
-    out_dir = 'output/' + options['run']['outdir'] + '/'
+    out_dir = '/cosma/home/dp004/dc-syke1/data/spherical_cloudy/output/' + options['run']['outdir'] + '/'
     if not os.path.exists(out_dir):
         os.makedirs(out_dir)
     # rewrite outdir to include path
@@ -42,12 +42,13 @@ def init_resume(options, dims):
         os.chdir(out_path)
         files = sorted(os.listdir('.'))
         files = list(filter(lambda fn: fn.endswith('.npy'), files))
+        files = list(filter(lambda fn: '_rates' not in fn and '_heat_cool' not in fn, files))
         # return to working directory
         os.chdir(wd)
         where = options['run']['resume']
-        if where == 'last':
+        if where.lower() == 'last':
             file_idx = len(files) - 1
-        elif where == 'refine_last':
+        elif where.lower() == 'refine_last':
             file_idx = len(files) - 1
             options['refine'] = True
         else:
@@ -118,8 +119,6 @@ def run_grid(opt, cosmopar, ions, dryrun=False):
     hztos  = const['hztos' ]
     Gcons  = const['Gcons' ]
     somtog = const['somtog']
-    hubpar = cosmo.hubblepar(redshift, cosmopar)
-    rhocrit = 3.0*(hubpar*hztos)**2/(8.0*np.pi*Gcons)
     
     while models:
         i, j, k, l = models.pop()
@@ -131,7 +130,15 @@ def run_grid(opt, cosmopar, ions, dryrun=False):
         logger.log('info', " UVB scale {2:.2f}    ({0:d}/{1:d})".format(i+1,numHMscl, HMscale[i]))
         logger.log('info', "###########################")
         logger.log('info', "###########################")
-        concentration = cosmo.massconc_Prada12(10**virialm[l], cosmopar, redshift[k])
+        if opt['geometry']['concrel'] == "Prada":
+            concentration = cosmo.massconc_Prada12(10**virialm[l], cosmopar, redshift[k])
+        elif opt['geometry']['concrel'] == "Eagle":
+            concentration = cosmo.massconc_Eagle(10**virialm[l], redshift[k])
+        else:
+            raise ValueError("Unknown concentration relation")
+
+        hubpar = cosmo.hubblepar(redshift[k], cosmopar)
+        rhocrit = 3.0*(hubpar*hztos)**2/(8.0*np.pi*Gcons)
         model = halomodel.make_halo(opt['geometry']['profile'],
                                     10**virialm[l] * somtog,
                                     baryfrac[l] * baryscale[j],
@@ -164,48 +171,53 @@ def run_grid(opt, cosmopar, ions, dryrun=False):
             prev_fname = None
     return
 
-
+# PP models don't load each other
+# so they can all be run in parallel
 def run_grid_PP(opt, cosmopar, ions, dryrun=False):
     # Get arrays defining the grid of models to run
     gridparams = init_grid(opt)
-    density  = gridparams['pp_dens']
-    depth    = gridparams['pp_depth']
-    redshift = gridparams['redshift']
+    density  = gridparams['pp_dens'  ]
+    coldens  = gridparams['pp_cdens' ]
+    redshift = gridparams['redshift' ]
 
-    numdens, numdepth, numreds = map(len, [density, depth, redshift])
+    numdens, numcdens, numreds = map(len, [density, coldens, redshift])
 
-    prev_fname, (sdens, sdepth, sreds) = init_resume(opt, [numdens, numdepth, numreds])
+    prev_fname, (sdens, scdens, sreds) = init_resume(opt, [numdens, numcdens, numreds])
 
     # build list of parameters for each model to run
     models = []
-    for i in range(sdens, numdens):     
-        for j in range(sdepth, numdepth):
+    for i in range(sdens, numdens):
+        for j in range(scdens, numcdens):
             for k in range(sreds, numreds):
                 models.append((i, j, k))
     models.reverse()
 
-    # Get some constants needed to define the halo model
-    const  = constants.get()
-    cmtopc = const['cmtopc']
+    useMP = opt['run']['pp_para']
+    if useMP:
+        tasks = []
 
     while models:
         i, j, k = models.pop()
-        logger.log('info', "###########################")
-        logger.log('info', "###########################")
-        logger.log('info', " slab depth {2:.1f} kpc ({0:d}/{1:d})".format(j+1,numdepth, depth[j]))
-        logger.log('info', " H density 10**{2:.1f} ({0:d}/{1:d})".format(i+1,numdens, density[i]))
-        logger.log('info', " redshift {2:.2f}      ({0:d}/{1:d})".format(k+1,numreds, redshift[k]))
-        logger.log('info', "###########################")
-        logger.log('info', "###########################")
         model = halomodel.make_halo(opt['geometry']['profile'],
-                                    1000 * depth[j] / cmtopc,
+                                    10.0**coldens[j],
                                     10.0**density[i])
         # Let's go!
         if not dryrun:
-            ok, res = gethalo.get_halo(model, redshift[k], cosmopar, ions, prevfile=None, options=opt)
-            if ok != True:
-                # something went wrong with the model
-                logger.log('error', res)
+            if useMP:
+                tasks.append(Task(gethalo.get_halo, hmodel=model, redshift=redshift[k], cosmopar=cosmopar,
+                                  ions=ions, prevfile=None, options=opt))
+            else:
+                logger.log('info', "###########################")
+                logger.log('info', "###########################")
+                logger.log('info', " H density 10**{2:.1f} ({0:d}/{1:d})".format(i+1,numdens, density[i]))
+                logger.log('info', " H column  10**{2:.1f} ({0:d}/{1:d})".format(j+1,numcdens, coldens[j]))
+                logger.log('info', " redshift {2:.2f}      ({0:d}/{1:d})".format(k+1,numreds, redshift[k]))
+                logger.log('info', "###########################")
+                logger.log('info', "###########################")
+                ok, res = gethalo.get_halo(model, redshift[k], cosmopar, ions, prevfile=None, options=opt)
+                if ok != True:
+                    # something went wrong with the model
+                    logger.log('error', res)
     return
 
 
@@ -213,7 +225,7 @@ def run_grid_PP(opt, cosmopar, ions, dryrun=False):
 ## START HERE ##
 ################
 
-if __name__ == '__main__':
+if __name__ == '__main__' or is_jug_running():
     # Load input file using first argument as filename
     try:
         input_file = sys.argv[1]
@@ -227,6 +239,18 @@ if __name__ == '__main__':
         sys.exit(1)
 
     opt = options.read_options(input_file)
+
+    # second argument disables logging to file if given
+    try:
+        if sys.argv[2] == 'redirect':
+            opt['log']['file'] = 'none'
+        opt['log']['level'] = sys.argv[3]
+    except IndexError:
+        pass
+    
+    # if running from interactive shell disable Jug parallel processing
+    if not is_jug_running():
+        opt['run']['pp_para'] = False
 
     # Whether to rerun the model to get better convergence
     # This will be set to True by the code whenever a model

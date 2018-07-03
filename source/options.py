@@ -1,5 +1,6 @@
 import collections
 import configparser
+import sys
 
 import logger
 
@@ -8,14 +9,15 @@ import logger
 
 # What types each setting should be
 option_types = collections.defaultdict(lambda: int) # default to integer type
-for str_opt in ['geometry:profile', 'UVB:spectrum', 'phys:temp_method', 'run:outdir', 'run:resume', 'log:level', 'log:file',
-                'grid:virialm', 'grid:redshift', 'grid:baryscale', 'grid:radscale', 'grid:pp_depth', 'grid:pp_dens']:
+for str_opt in ['geometry:profile', 'geometry:concrel', 'UVB:spectrum', 'phys:temp_method', 'run:outdir', 'run:resume', 'log:level', 'log:file',
+                'grid:virialm', 'grid:redshift', 'grid:baryscale', 'grid:radscale', 'grid:pp_cdens', 'grid:pp_dens']:
     option_types[str_opt] = str
 for flt_opt in ['geometry:scale', 'geometry:acore', 'UVB:scale', 'UVB:slope', 'run:concrit', 'phys:gastemp', 'phys:metals', 'phys:bturb',
                 'phys:hescale']:
     option_types[flt_opt] = float
-for bool_opt in ['phys:ext_press', 'run:do_ref', 'run:do_smth']:
-    option_types[bool_opt] = lambda s: s.capitalize() == 'TRUE'
+for bool_opt in ['phys:ext_press', 'run:do_ref', 'run:do_smth', 'run:pp_para', 'run:lv_plot',
+                 'save:rates', 'save:heat_cool', 'save:recomb', 'save:intensity']:
+    option_types[bool_opt] = lambda s: s.upper() == 'TRUE'
 
 # Default settings for options
 def default(save=False):
@@ -23,6 +25,7 @@ def default(save=False):
     # Set the default options for running
     # Set some of the basic operation modes
     runpar = dict({})
+    runpar['pp_para'] = False      # Whether to run all plane parallel models in parallel
     runpar['miniter'] = 10         # Minimum number of iterations to perform
     runpar['maxiter'] = 100000     # Maximum number of iterations to perform
     runpar['nsample'] = 500        # Number of radial points to consider
@@ -36,7 +39,16 @@ def default(save=False):
                                    #   string: find file with matching name and start from there
     runpar['do_ref' ] = False      # Whether to attempt refining
     runpar['do_smth'] = True       # Whether to smooth out discontinuities in the H I Y profile
+    runpar['lv_plot'] = False      # Whether to plot each iteration without interrupting calculation
+                                   # (edit the source code to change what is plotted)
     options['run'   ] = runpar
+
+    savepar = dict({})
+    savepar['rates'    ] = False   # Whether to save the ionisation rates
+    savepar['recomb'   ] = False   # Whether to save the recombination rates
+    savepar['heat_cool'] = False   # Whether to save the heating and cooling rates
+    savepar['intensity'] = False   # Whether to save the mean intensity J_nu
+    options['save'     ] = savepar
 
     # Set logging settings
     logpar = dict({})
@@ -47,6 +59,7 @@ def default(save=False):
     # Set the geometry
     geompar = dict({})
     geompar['profile' ] = 'NFW'         # Which geometry should be used
+    geompar['concrel' ] = 'Prada'       # Which mass-concentration relation should be used
     geompar['scale'   ] = 100           # Outer radius in units of R_vir
     geompar['acore'   ] = 0.5           # Ratio of core radius to virial radius (Cored density profile only)
     options['geometry'] = geompar
@@ -62,11 +75,11 @@ def default(save=False):
     physpar = dict({})
     physpar['ext_press'  ] = False      # Whether to impose condition that density should approach cosmic mean
     physpar['temp_method'] = 'original' # Method to use to calculate temperature:
-                                        #   equilibrium - always use thermal equilibrium
-                                        #   adiabatic - always use 1/rate = Hubble time
                                         #   eagle - use cooling rate table from Eagle
                                         #   original - use Ryan's original thermal equilibrium function
                                         #   relhic - use tabulated nH-T relation from ABL paper
+                                        #   blend - use eqbm above nH=10**-4.8 and relhic below, interpolating smoothly between them
+                                        #   isothermal - use constant temperature given by phys:gastemp
     physpar['bturb'  ] = 0.0        # Value of turbulent Doppler parameter in km/s
     physpar['metals' ] = 1.0E-3     # metallicity relative to solar
     physpar['gastemp'] = 20000      # initial gas temperature in Kelvin
@@ -80,7 +93,7 @@ def default(save=False):
     gridpar['redshift' ] = "np.zeros(1)" # redshifts
     gridpar['baryscale'] = "np.ones(1)" # scaling of universal baryon fraction
     gridpar['radscale' ] = "np.ones(1)" # scaling of UVB intensity
-    gridpar['pp_depth' ] = "np.ones(1)" # Depth of slab in kpc (Plane parallel geometry only)
+    gridpar['pp_cdens' ] = "np.full(1, 18)" # log of column density depth in slab in cm^-2 (Plane parallel geometry only)
     gridpar['pp_dens'  ] = "np.full(1, -1.0)" # log of H number density in slab in cm^-3 (Plane parallel geometry only)
     options['grid'     ] = gridpar
 
@@ -88,7 +101,7 @@ def default(save=False):
         parser = configparser.ConfigParser()
         parser.read_dict(options)
 
-        with open('defaults.ini', 'w') as f:
+        with open('./input/defaults.ini', 'w') as f:
             parser.write(f)        
 
     return options
@@ -102,7 +115,12 @@ def read_options(filename):
     logger.init(level='warning', name='options')
     
     parser = configparser.ConfigParser()
-    config = parser.read(filename)
+    try:
+        config = parser.read(filename)
+    except Exception as e:
+        logger.log('critical', "Error parsing config file {} (details follow)".format(filename), 'options')
+        logger.log('critical', e.message, 'options')
+        sys.exit(1)        
 
     for section in parser.sections():
         if section in options.keys():

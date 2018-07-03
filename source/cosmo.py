@@ -1,5 +1,6 @@
 import numpy as np
 import cython_fns
+import os
 
 def hubblepar(z, cosmopar):
     Ez = np.sqrt(cosmopar[2] + cosmopar[3] * ((1.0 + z) ** 3.0))
@@ -38,6 +39,14 @@ def massconc_Prada12(mvir, cosmopar, redshift=3, steps=100000):
     Csigdash = 2.881 * (1.0 + (sigdash/1.257)**1.022) * np.exp(0.060 / sigdash**2)  # Eq 16
     conc = Bzero * Csigdash
     return conc
+
+def massconc_Eagle(mvir, redshift=0.0):
+    if redshift != 0.0:
+        raise ValueError("Eagle M-c relation is only valid for z=0.0")
+
+    Ms, cs = np.loadtxt(os.path.join(os.path.dirname(__file__), "data/Mvir_c_Eagle.dat"), unpack=True)
+
+    return np.interp(mvir, Ms, cs)
 
 def get_cosmo(use="planck"):
     if use.lower() == "planck":
