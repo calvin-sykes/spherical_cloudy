@@ -186,8 +186,13 @@ def nint_costheta(double[:,:,::1] coldens not None,
             for r in range(sz_r):
                 rint = 0.0
                 for mu in range(0,sz_mu-1):
-                    tau  = xsec[0,nu]*coldens[0,r,mu] + xsec[1,nu]*coldens[1,r,mu] + xsec[2,nu]*coldens[2,r,mu]
-                    taup = xsec[0,nu]*coldens[0,r,mu+1] + xsec[1,nu]*coldens[1,r,mu+1] + xsec[2,nu]*coldens[2,r,mu+1]
+                    #tau = xsec[0,nu]*coldens[0,r,mu] + xsec[1,nu]*coldens[1,r,mu] + xsec[2,nu]*coldens[2,r,mu]
+                    #taup = xsec[0,nu]*coldens[0,r,mu+1] + xsec[1,nu]*coldens[1,r,mu+1] + xsec[2,nu]*coldens[2,r,mu+1]
+                    tau = 0.0
+                    taup = 0.0
+                    for ion in range(sz_ion):
+                        tau += xsec[ion,nu]*coldens[ion,r,mu]
+                        taup += xsec[ion,nu]*coldens[ion,r,mu+1]
                     rint += 0.5 * (cexp(-tau) + cexp(-taup)) * (muarr[mu+1]-muarr[mu])
                 retarr[nu,r] = 0.5 * jzero[nu] * rint
     return np.asarray(retarr)
