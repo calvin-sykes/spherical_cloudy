@@ -187,11 +187,11 @@ class LivePlot:
         plt.ioff()
 
 
-def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
+def get_halo(hmodel, redshift, cosmopar=cosmo.get_cosmo(),
              ions=["H I", "He I", "He II"], prevfile=None, options=None):
     """
     hmodel    : The halo model which defines the geometry
-    redshift  : The redshift to evaluate the UVB at
+    redshift  : The redshift to evaluate the UVB and background density at
     cosmopar  : Set the cosmology of the simulation (hubble constant/100 km/s/Mpc, Omega_B, Omega_L, Omega_M)
     ions      : A list of ions to consider
     prevfile  : A filename for a previous run's output to load as an initial solution
@@ -221,10 +221,8 @@ def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
     nummu   = options["run"]["nummu"  ]
     concrit = options["run"]["concrit"]
     ncpus   = options["run"]["ncpus"  ]
-    do_ref  = options["run"]["do_ref" ]
     do_smth = options["run"]["do_smth"]
     lv_plot = options["run"]["lv_plot"]
-    refine  = options["run"]["refine" ]
 
     # What quantities should be output
     svrates = options["save"]["rates"    ] # ionisation rates
@@ -232,12 +230,7 @@ def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
     svhtcl  = options["save"]["heat_cool"] # heating + cooling rates
     svjnu   = options["save"]["intensity"] # mean intensity
 
-    # Method used to define the radial coordinate
-    # depends on whether we are refining a model
-    if refine:
-        radmethod = 1
-    else:
-        radmethod = 2
+    radmethod = 2
 
     const = constants.get()    
     kB      = const["kB"]
@@ -269,7 +262,7 @@ def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
     hubb_time = cosmoVal.age(redshift).value * (365.25 * 86400 * 1.0E9)
 
     # Get the element ID numbers
-    elID = elemids.getids(ions,metals,Hescale)
+    elID = elemids.getids(ions, metals, Hescale)
 
     # How many ions do we need to calculate
     nions = len(ions)
@@ -302,6 +295,9 @@ def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
         logger.log("CRITICAL","You must include ""H I"" in your model")
         sys.exit(1)
 
+    hubb_par = cosmo.hubblepar(redshift, cosmopar)
+    rhocrit = 3.0*(hubb_par * hztos)**2 / (8.0 * np.pi * Gcons)
+    bkdens = cosmopar[1] * rhocrit / (protmss * (1 + 4 * prim_He))
     logger.log("debug", "Loading radiation fields")
     if options["UVB"]["spectrum"][0:2] == "HM":
         # Get the Haardt & Madau background at the appropriate redshift
@@ -433,13 +429,7 @@ def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
             old_radius = tdata[:,0] / cmtopc
             # redefine radius to have fine interpolation across ionised -> neutral transition region
             # and resample quantities onto this new set of radii
-            if refine:
-                old_HI_Yprof = tdata[:,arridx["voldens"]["H I"]] / tdata[:,2]
-                # use the density profile to find the transition region
-                # radial coordinates are more finely interpolated there
-                radius = get_radius(hmodel.rvir, geomscale, npts, method=radmethod, yprof=old_HI_Yprof)
-            else:
-                radius = get_radius(hmodel.rvir, geomscale, npts, method=radmethod)
+            radius = get_radius(hmodel.rvir, geomscale, npts, method=radmethod)
 
             # resample quantities from old radial coordinates to new ones
             prof_temperature = np.interp(radius, old_radius, tdata[:,1])
@@ -551,7 +541,6 @@ def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
             if use_pcon:
                 # assume outermost density value is equal to mean background density
                 # and use as scaling factor to get density in physical units
-                bkdens = 10**(-6.7)
                 dens_scale = bkdens / temp_densitynH[-1]
             else:
                 # constrain central density by requiring total mass
