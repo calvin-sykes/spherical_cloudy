@@ -13,6 +13,7 @@ import photoion
 import colioniz
 import elemids
 import recomb
+import emis
 import cosmo
 import misc
 import table_coolfunc
@@ -299,8 +300,9 @@ def get_halo(hmodel, redshift, cosmopar=cosmo.get_cosmo(),
     hubb_par = cosmo.hubblepar(redshift, cosmopar)
     rhocrit = 3.0*(hubb_par * hztos)**2 / (8.0 * np.pi * Gcons)
     bkdens = cosmopar[1] * rhocrit / (protmss * (1 + 4 * prim_He))
+
     logger.log("debug", "Loading radiation fields")
-    if options["UVB"]["spectrum"][0:2] == "HM":
+    if options["UVB"]["spectrum"][0:2] in {"HM", "MH"}:
         # Get the Haardt & Madau background at the appropriate redshift
         version = options["UVB"]["spectrum"][2:4] # HM12 or HM05
         slope   = options["UVB"]["slope"]         # shape parameter alpha_UV (Crighton et al 2015, https://arxiv.org/pdf/1406.4239.pdf)
@@ -308,6 +310,8 @@ def get_halo(hmodel, redshift, cosmopar=cosmo.get_cosmo(),
         jzero *= options["UVB"]["scale"]
     elif options["UVB"]["spectrum"][0:2] == "PL":
         jzero, nuzero = radfields.powerlaw(elID)
+    elif options["UVB"]["spectrum"] == "AGN":
+        jzero, nuzero = radfields.AGN(elID)
     else:
         logger.log("CRITICAL", "The radiation field '{0:s}' is not implemented yet".format(options["UVB"]["spectrum"]))
         sys.exit()
@@ -325,7 +329,7 @@ def get_halo(hmodel, redshift, cosmopar=cosmo.get_cosmo(),
 
     # If the slope of the UVB has been changed, renormalise it so that the hydrogen photoionisation rate
     # stays the same as for the fiducial/flat H&M UVB
-    if slope != 0:
+    if options["UVB"]["spectrum"][0:2] in {"HM", "MH"} and slope != 0:
         flat_jzero = radfields.HM_fiducial(elID, redshift, version)
         flat_jzero *= options["UVB"]["scale"]
         flat_gamma = 4 * np.pi * spTrapz(flat_jzero / (planck * nuzero) * phelxs[elID["H I"].id], nuzero)
@@ -398,6 +402,25 @@ def get_halo(hmodel, redshift, cosmopar=cosmo.get_cosmo(),
     elif temp_method == 'relhic':
         logger.log("info", "Using RELHIC nH-T relation")
         relhic_interp = table_coolfunc.load_relhic_nHT()
+
+    He_emissivities = emis.HeEmissivities()
+    if options['save']['he_emis'] == 'all':
+        He_want_wls = He_emissivities.get_wavelengths()
+    elif options['save']['he_emis'] != 'none':
+        He_all_wls = He_emissivities.get_wavelengths()
+        try:
+            He_want_wls = eval(options['save']['he_emis'])
+        except:
+            logger.log('critical', "Failed to eval He lines save specification {}".format(
+            options['save']['he_emis']))
+            sys.exit(1)
+        if type(He_want_wls) != list: # promote scalar to length-1 list
+            He_want_wls = [He_want_wls]
+        He_want_wls = map(float, He_want_wls)
+        if not set(He_want_wls).issubset(He_all_wls):
+            logger.log('warning', "One or more requested He lines are unknown")
+    else:
+        He_want_wls = None
 
     # if string is passed, interpret as filename for the previous run
     # this is used as an initial solution to speed up convergence
@@ -1026,17 +1049,40 @@ def get_halo(hmodel, redshift, cosmopar=cosmo.get_cosmo(),
 
     logger.log("info", "Calculating Ha surface brightness profile")
     Harecomb = recomb.Ha_recomb(prof_temperature)
-    HIIdensity = densitynH * (1.0-Yprofs[elID["H I"].id])
-    elecprot = Harecomb*electrondensity*HIIdensity
+    HIIdensity = densitynH - prof_density[elID["H I"].id]
+    elecprot = Harecomb * electrondensity * HIIdensity # emissivity in photons / cm^3 / s
     if geom in {"NFW", "Burkert", "Cored"}:
-        HaSB = (1.0/(4.0*np.pi)) * cython_fns.coldensprofile(elecprot, radius)  # photons /cm^2 / s / SR
+        HaSB = (1.0 / (4.0 * np.pi)) * cython_fns.coldensprofile(elecprot, radius)  # photons /cm^2 / s / SR
     elif geom == "PP":
-        # assume emission is all in one direction (?)
-        HaSB = 2.0 * (1.0/(4.0*np.pi)) * cython_fns.calc_coldensPP(elecprot, radius)  # photons /cm^2 / s / SR
+        HaSB = (1.0 / (4.0 * np.pi)) * cython_fns.calc_coldensPP(elecprot, radius)  # photons /cm^2 / s / SR
     # Multiply by Ha energy to convert from photons/s to ergs/s
     # Multiply by (4 * pi)/(4 * pi * (60^2 * 180/pi)^2) to convert from per SR to per arcsec^2
     HaSB *=  (3.0e10 * planck / 6.563e-5) / (4.254517E10)
-    #HaSB = HaSB * (1.98645E-8/6563.0)/4.254517E10   # ergs /cm^2 / s / arcsec^2
+
+    logger.log("info", "Calculating HeII 4686A surface brightness profile")
+    HeIIrecomb = recomb.HeII4686_recomb(prof_temperature)
+    HIIIdensity = (densitynH * prim_He) - prof_density[elID["He I"].id] - prof_density[elID["He II"].id]
+    elecprot = HeIIrecomb * electrondensity * HIIdensity # emissivity in photons / cm^3 / s
+    if geom in {"NFW", "Burkert", "Cored"}:
+        HeII_SB = (1.0 / (4.0 * np.pi)) * cython_fns.coldensprofile(elecprot, radius)  # photons /cm^2 / s / SR
+    elif geom == "PP":
+        HeII_SB = (1.0 / (4.0 * np.pi)) * cython_fns.calc_coldensPP(elecprot, radius)  # photons /cm^2 / s / SR
+    # Multiply by HeII 4686A energy to convert from photons/s to ergs/s
+    # Multiply by (4 * pi)/(4 * pi * (60^2 * 180/pi)^2) to convert from per SR to per arcsec^2
+    HeII_SB *=  (3.0e10 * planck / 4.686e-5) / (4.254517E10)
+    
+    if He_want_wls is not None:
+        logger.log("info", "Calculating HeI surface brightness profile(s)")
+        He_emis = He_emissivities.get_emis(He_want_wls, prof_temperature, electrondensity, prof_density[elID['He II'].id])
+        He_SB = np.zeros_like(He_emis)
+        for i, wl in enumerate(He_want_wls):
+            # These emissivities are already in energy units so we do not multiply by the line energies here
+            if geom in {"NFW", "Burkert", "Cored"}:
+                He_SB[i] = (1.0 / (4.0 * np.pi)) * cython_fns.coldensprofile(He_emis[i], radius)  # erg / cm^2 / s / SR
+            else:
+                He_SB[i] = (1.0 / (4.0 * np.pi)) * cython_fns.calc_coldensPP(He_emis[i], radius)  # erg / cm^2 / s / SR
+            # Multiply by (4 * pi)/(4 * pi * (60^2 * 180/pi)^2) to convert from per SR to per arcsec^2
+            He_SB[i] *= 1 / (4.254517E10)
 
     timeB = time.time()
     logger.log("info", "Test completed in {0:f} mins".format((timeB-timeA)/60.0))
