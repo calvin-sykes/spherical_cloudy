@@ -12,10 +12,12 @@ class HaloModel:
         self.rhods = 200.0 * rho_crit * conc**3 / self.fm(conc)
 
     def fm(self, x):
+        """Return f_M(x) s.t. M(<r) = (4 * pi * rho_s * (r_s)**3 / 3) * f_M(x)"""
         raise NotImplementedError("fm is not defined for base class")
 
 
 class NFWHalo(HaloModel):
+    """NFW halo with rho(x) = rho_s / (x * (1 + x)**2) for x = r/r_s"""
     def __init__(self, virial_mass, baryon_frac, rho_crit, conc, **kwargs):
         HaloModel.__init__(self, virial_mass, baryon_frac, rho_crit, conc)
         self.name = 'NFW'
@@ -25,6 +27,7 @@ class NFWHalo(HaloModel):
 
 
 class BurkertHalo(HaloModel):
+    """Burkert halo with rho(x) = (rho_0 * (r_0)**3) / ((r + r_0) * (r**2 + (r_0)**2)) for x = r/r_0"""
     def __init__(self, virial_mass, baryon_frac, rho_crit, conc, **kwargs):
         HaloModel.__init__(self, virial_mass, baryon_frac, rho_crit, conc)
         self.name = 'Burkert'
@@ -34,6 +37,7 @@ class BurkertHalo(HaloModel):
 
 
 class CoredHalo(HaloModel):
+    """Modified isothermal halo with rho(x) = rho_0 / (1 + (r / r_c)**2) for x = r / r_c"""
     def __init__(self, virial_mass, baryon_frac, rho_crit, conc, acore):
         HaloModel.__init__(self, virial_mass, baryon_frac, rho_crit, conc)
         self.acore = acore
