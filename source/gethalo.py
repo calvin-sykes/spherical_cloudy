@@ -223,6 +223,7 @@ def get_halo(hmodel, redshift, cosmopar=cosmo.get_cosmo(),
     ncpus   = options["run"]["ncpus"  ]
     do_smth = options["run"]["do_smth"]
     lv_plot = options["run"]["lv_plot"]
+    out_dir = options["run"]["outdir" ]
 
     # What quantities should be output
     svrates = options["save"]["rates"    ] # ionisation rates
@@ -1040,21 +1041,31 @@ def get_halo(hmodel, redshift, cosmopar=cosmo.get_cosmo(),
     timeB = time.time()
     logger.log("info", "Test completed in {0:f} mins".format((timeB-timeA)/60.0))
 
-    out_dir = options["run"]["outdir"]
-
     if lv_plot:
         live_plot.close()
 
-    # Save the results        
+    # Save the results
     if geom in {"NFW", "Burkert", "Cored"}:
+        # Create a structured datatype with all requested fields
+        save_dtype = [('rad', 'float64'),
+                      ('temp', 'float64'),
+                      ('hden', 'float64'),
+                      ('eden', 'float64'),
+                      ('pres', 'float64'),
+                      ('HaSB', 'float64'),
+                      ('vden', 'float64', nions),
+                      ('cden', 'float64', nions),
+                      ('yprf', 'float64', nions)]
         save_pressure = kB * densitynH * prof_temperature / masspp # want pressure in physical units
-        mstring = mangle_string("{0:3.2f}".format(np.log10(hmodel.mvir / somtog)))
-        cstring = mangle_string("{0:3.2f}".format(hmodel.rvir / hmodel.rscale))
+        mstring = mangle_string("{0:3.3f}".format(np.log10(hmodel.mvir / somtog)))
+        cstring = mangle_string("{0:3.3f}".format(hmodel.rvir / hmodel.rscale))
         rstring = mangle_string("{0:3.2f}".format(redshift))
-        bstring = mangle_string("{0:+3.2f}".format(np.log10(hmodel.baryfrac)))
-        if options["UVB"]["spectrum"][0:2] =="HM":
+        bstring = mangle_string("{0:+3.3f}".format(np.log10(hmodel.baryfrac)))
+        if options["UVB"]["spectrum"][0:2] in {"HM", "MH"}:
             hstring = mangle_string("HMscale{0:+3.2f}".format(np.log10(options["UVB"]["scale"])))
-        elif options["UVB"]["spectrum"][0:2]=="PL":
+        elif options["UVB"]["spectrum"][0:2] == "PL":
+            hstring = options["UVB"]["spectrum"]
+        elif options["UVB"]["spectrum"] == "AGN":
             hstring = options["UVB"]["spectrum"]
         outfname = out_dir + ("{0:s}_mass{1:s}_concentration{2:s}_redshift{3:s}_baryscl{4:s}_{5:s}_{6:d}-{7:d}"
                               .format(geom,mstring,cstring,rstring,bstring,hstring,npts,nummu))
@@ -1069,9 +1080,18 @@ def get_halo(hmodel, redshift, cosmopar=cosmo.get_cosmo(),
                                  prof_coldens.T,
                                  Yprofs.T), axis=1)
     elif geom == "PP":
+        save_dtype = [('rad', 'float64'),
+                      ('temp', 'float64'),
+                      ('hden', 'float64'),
+                      ('eden', 'float64'),
+                      ('HaSB', 'float64'),
+                      ('vden', 'float64', nions),
+                      ('cden', 'float64', nions),
+                      ('yprf', 'float64', nions)]
+        
         dstring = mangle_string("{0:+3.2f}".format(np.log10(PP_dens)))
         cdstring = mangle_string("{0:+3.2f}".format(np.log10(PP_cden)))
-        if options["UVB"]["spectrum"][0:2] == "HM":
+        if options["UVB"]["spectrum"][0:2] in  {"HM", "MH"}:
             hstring = mangle_string("HMscale{0:+3.2f}".format(np.log10(options["UVB"]["scale"])))
         elif options["UVB"]["spectrum"][0:2]=="PL":
             hstring = options["UVB"]["spectrum"]
@@ -1086,54 +1106,72 @@ def get_halo(hmodel, redshift, cosmopar=cosmo.get_cosmo(),
                                  prof_density.T,
                                  prof_coldens.T,
                                  Yprofs.T), axis=1)
-    np.save(outfname, tmpout)
+
+    if He_want_wls is not None:
+        save_dtype.extend([('HeI_{:.0f}'.format(wl), 'float64') for wl in He_want_wls]) # TODO: list of HeI lines to save
+
+        tmpout = np.concatenate((tmpout,
+                                 He_SB.T), axis=1)
 
     if svrates:
-        tmpout = np.concatenate((radius.reshape((npts,1)) * cmtopc,
-                                prof_phionrate.T,
-                                prof_scdryrate.T,
-                                (densitynH * (1 - Yprofs[elID["H I"].id]).reshape((1, npts)).repeat(nions, axis=0) * prof_chrgtraniHII).T,
-                                (densitynH * (prim_He * Yprofs[elID["He II"].id]).reshape((1, npts)).repeat(nions, axis=0) * prof_chrgtraniHeII).T,
-                                prof_other.T,
-                                prof_colionrate.T), axis=1)
-        np.save(outfname + '_rates', tmpout)
+        save_dtype.extend([('phion', 'float64', nions),  
+                           ('scdry', 'float64', nions),  
+                           ('CT_HII', 'float64', nions), 
+                           ('CT_HeII', 'float64', nions),
+                           ('other', 'float64', nions),  
+                           ('colion', 'float64', nions)])
+        
+        tmpout = np.concatenate((tmpout,
+                                 prof_phionrate.T,
+                                 prof_scdryrate.T,
+                                 (densitynH * (1 - Yprofs[elID["H I"].id]).reshape((1, npts)).repeat(nions, axis=0) * prof_chrgtraniHII).T,
+                                 (densitynH * (prim_He * Yprofs[elID["He II"].id]).reshape((1, npts)).repeat(nions, axis=0) * prof_chrgtraniHeII).T,
+                                 prof_other.T,
+                                 prof_colionrate.T), axis=1)
 
     if svrcmb:
-        tmpout = np.concatenate((radius.reshape((npts,1)) * cmtopc,
+        save_dtype.extend([('recomb', 'float64', nions),  
+                           ('rc_CTHI', 'float64', nions), 
+                           ('rc_CTHeI', 'float64', nions)])
+
+        tmpout = np.concatenate((tmpout,
                                  prof_recomb.T,
                                  prof_recombCTHI.T,
                                  prof_recombCTHeI.T), axis=1)
-        np.save(outfname + '_recomb', tmpout)
 
     if svhtcl:
-        tmpout = np.concatenate((radius.reshape((npts,1)) * cmtopc,
-                                 prof_temperature.reshape((npts,1)),
+        save_dtype.extend([('heat', 'float64'),
+                           ('cool', 'float64')])
+
+        tmpout = np.concatenate((tmpout,
                                  total_heat.reshape((npts,1)),
                                  actual_cool.reshape((npts,1))), axis=1)
-        np.save(outfname + '_heat_cool', tmpout)
 
-    if svjnu:
-        tmpout = np.concatenate((radius.reshape((npts,1)) * cmtopc,
-                                 jnurarr.T), axis=1)
-        tmpnu = np.insert(nuzero, 0, np.nan).reshape((1, len(nuzero) + 1))
-        tmpout = np.concatenate((tmpnu, tmpout), axis=0)
-        np.save(outfname + '_intensity', tmpout)
-    
+    # TODO Decide how to handle saving Jnu(r)
+    # need to record frequencies as well as intensity
+    # if svjnu:
+    #     save_dtype.extend([('Jnu', 'float64', jnurarr.shape[0])])
+    #     tmpout = np.concatenate((tmpout,
+    #                              jnurarr.T), axis=1)
+    #     tmpnu = np.insert(nuzero, 0, np.nan).reshape((1, len(nuzero) + 1))
+    #     tmpout = np.concatenate((tmpnu, tmpout), axis=0)
+    #     #np.save(outfname + '_intensity', tmpout)
+
+    assert np.dtype(save_dtype).itemsize == tmpout.itemsize * tmpout.shape[1]
+    tmpout = np.ascontiguousarray(tmpout)
+    tmpout.dtype = save_dtype
+    np.save(outfname, tmpout) 
+
     # dispose of process pool
     if ncpus > 1:
         pool.close()
         pool.join()
 
     # Stop the program if a large H I column density has already been reached
-    #if np.max(np.log10(prof_coldens[elID["H I"].id])) > 22.0:
-    #    print "Terminating after maximum N(H I) has been reached"
-    #    sys.exit()
+    if np.max(np.log10(prof_coldens[elID["H I"].id])) > 24.0:
+        print "Terminating after maximum N(H I) has been reached"
+        sys.exit()
 
-    # If refining is enabled, signal that it should be performed if the hydrogen became neutral in this model
-    # return special string to indicate this, but check that we're not currently refining a model!
-    if do_ref and (np.max(Yprofs[elID["H I"].id]) > 0.5) and refine == False:
-        return("needs_refine", outfname + '.npy')
-    else:
-        # Everything is OK
-        # Return True, and the output filename to be used as the input to the next iteration    
-        return (True, outfname + '.npy')
+    # Everything is OK
+    # Return True, and the output filename to be used as the input to the next iteration    
+    return (True, outfname + '.npy')
