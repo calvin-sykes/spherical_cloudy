@@ -4,18 +4,18 @@ import sys
 
 import logger
 
-## NOTE: If options are added to the program b changing the dictionaries defined below,
+## NOTE: If options are added to the program by changing the dictionaries defined below,
 ##       this file needs to be executed as a standalone script to update the default config file
 
 # What types each setting should be
 option_types = collections.defaultdict(lambda: int) # default to integer type
 for str_opt in ['geometry:profile', 'geometry:concrel', 'UVB:spectrum', 'phys:temp_method', 'run:outdir', 'run:resume', 'log:level', 'log:file',
-                'grid:virialm', 'grid:redshift', 'grid:baryscale', 'grid:radscale', 'grid:pp_cdens', 'grid:pp_dens']:
+                'grid:virialm', 'grid:redshift', 'grid:baryscale', 'grid:radscale', 'grid:pp_cdens', 'grid:pp_dens', 'save:he_emis']:
     option_types[str_opt] = str
 for flt_opt in ['geometry:scale', 'geometry:acore', 'UVB:scale', 'UVB:slope', 'run:concrit', 'phys:gastemp', 'phys:metals', 'phys:bturb',
                 'phys:hescale']:
     option_types[flt_opt] = float
-for bool_opt in ['phys:ext_press', 'run:do_ref', 'run:do_smth', 'run:pp_para', 'run:lv_plot',
+for bool_opt in ['phys:ext_press', 'run:pp_para', 'run:lv_plot',
                  'save:rates', 'save:heat_cool', 'save:recomb', 'save:intensity']:
     option_types[bool_opt] = lambda s: s.upper() == 'TRUE'
 
@@ -35,10 +35,7 @@ def default(save=False):
     runpar['outdir' ] = 'not_set'  # Directory under '/output' to save results to
     runpar['resume' ] = 'none'     # Whether to resume from a previously written output file
                                    #   'last': pick up from the most recent file
-                                   #   'refine_last' : take the most recent file and try to refine it to get rid of the discontinuity
                                    #   string: find file with matching name and start from there
-    runpar['do_ref' ] = False      # Whether to attempt refining
-    runpar['do_smth'] = True       # Whether to smooth out discontinuities in the H I Y profile
     runpar['lv_plot'] = False      # Whether to plot each iteration without interrupting calculation
                                    # (edit the source code to change what is plotted)
     options['run'   ] = runpar
@@ -48,6 +45,11 @@ def default(save=False):
     savepar['recomb'   ] = False   # Whether to save the recombination rates
     savepar['heat_cool'] = False   # Whether to save the heating and cooling rates
     savepar['intensity'] = False   # Whether to save the mean intensity J_nu
+    savepar['he_emis'  ] = 'none'  # Whether to save HeI line surface brightnesses
+                                   # if 'none', no SBs will be saved
+                                   # if 'all' all lines will be saved
+                                   # if a single value, that line will be saved
+                                   # if a list of values, each will be saved as a separate column
     options['save'     ] = savepar
 
     # Set logging settings
@@ -59,7 +61,8 @@ def default(save=False):
     # Set the geometry
     geompar = dict({})
     geompar['profile' ] = 'NFW'         # Which geometry should be used
-    geompar['concrel' ] = 'Prada'       # Which mass-concentration relation should be used
+    geompar['concrel' ] = 'Ludlow'      # Which mass-concentration relation should be used
+                                        # (chg  27/9/18 from Prada as that isn't for Planck cosmo)
     geompar['scale'   ] = 100           # Outer radius in units of R_vir
     geompar['acore'   ] = 0.5           # Ratio of core radius to virial radius (Cored density profile only)
     options['geometry'] = geompar
@@ -87,7 +90,7 @@ def default(save=False):
     options['phys'   ] = physpar
 
     # Set grid of parameters
-    # Each option should be a string containing a statement that gets eval'd to produce an interable of parameter values
+    # Each option should be a string containing a statement that gets eval'd to produce an iterable of parameter values
     gridpar = dict({})
     gridpar['virialm'  ] = "np.linspace(8.0, 10.0, 21)" # log of halo virial masses
     gridpar['redshift' ] = "np.zeros(1)" # redshifts
