@@ -1,64 +1,110 @@
 import numpy as np
-import cython_fns
-import os
 
 def hubblepar(z, cosmopar):
     Ez = np.sqrt(cosmopar[2] + cosmopar[3] * ((1.0 + z) ** 3.0))
     return Ez * 100.0 * cosmopar[0]
 
-def massconc_Klypin11(mvir, cosmo, redshift=3):
-    """
-    This is not for M200 and r200 --- use the Prada 2012 implementation
-    """
-    sys.exit()
-    rdshft = np.array([0.5,1.0,2.0,3.0,5.0])
-    czero  = np.array([7.08,5.45,3.67,2.83,2.34])
-    mzero  = np.array([1.5E17,2.5E15,6.8E13,6.3E12,6.6E11])
-    # Redshift 3 relation:
-    conc = 2.83 * (mvir/(1.0E12/cosmo[0]))**-0.075 * (1.0 + (mvir/(6.3E12/cosmo[0]))**0.26)
+
+def massconc_Ludlow16(mvir, cosmopar, redshift=0.0):
+    """Ludlow+ 2016 appendix C"""
+    hubble, Omega_b, Omega_l, Omega_m = cosmopar # These are the subscript 0 values!!!
+    ## Step 1: calculate nu
+    # Eq. (C12)
+    fun_OmLz = lambda z: Omega_l / (Omega_l + Omega_m * (1. + z)**3.)
+    # Eq. (C11)
+    fun_Psi = lambda z: (1. - fun_OmLz(z))**(4. / 7.) - fun_OmLz(z) + (1. + (1. - fun_OmLz(z)) / 2.) * (1 + fun_OmLz(z) / 70.)
+    OmLz = fun_OmLz(redshift)
+    Ommz = 1 - OmLz
+    # Eq. (C10)
+    Dz = (Ommz / Omega_m) * (fun_Psi(0.) / fun_Psi(redshift)) / (1. + redshift)
+    # Eq. (C9)
+    xi = (1e10 / hubble) / mvir
+    # Eq. (C8)
+    sigma = Dz * 22.26 * xi**0.292 / (1. + 1.53 * xi**0.275 + 3.36 * xi**0.198)
+    # text above Eq. (C1)
+    nu = 1.686 / sigma
+    ## Step 2: Evaluate c(nu)
+    # Eqs. (C2-C6)
+    c0 = 3.395 * (1. + redshift)**-0.215
+    beta = 0.307 * (1. + redshift)**0.540
+    gam1 = 0.628 * (1. + redshift)**-0.047
+    gam2 = 0.317 * (1. + redshift)**-0.893
+    a =  1. / (1. + redshift)
+    nu0 = (4.135 - (0.564 / a) - (0.210 / a**2) + (0.0557 / a**3) -  0.00348 / a**4) / Dz
+    # Step 3: Evaluate c(nu)
+    # Eq. (C1)
+    conc = c0 * (nu / nu0)**-gam1 * (1. + (nu / nu0)**(1./beta))**(-beta * (gam2 - gam1))
     return conc
 
-def cmin_prada(xv):
-    return 3.681 + (5.033-3.681)*(0.5 + np.arctan(6.948*(xv-0.424))/np.pi)
 
-def invsigmin_prada(xv):
-    return 1.047 + (1.646-1.047)*(0.5 + np.arctan(7.386*(xv-0.526))/np.pi)
+def massconc_Bose16(mvir, cosmopar, redshift=0.0):
+    """From Eq. 17 of Bose et. al. 2016"""
+    mass_hm = 2e8 / cosmopar[0]
+    gam1 = 60
+    gam2 = 0.17
+    fun_beta = lambda z: 0.026 * z - 0.04
 
-def massconc_Prada12(mvir, cosmopar, redshift=3, steps=100000):
-    """
-    Prada et al. (2012), MNRAS, 423, 3018
-    """
-    xval = ((cosmopar[2]/cosmopar[3])**(1.0/3.0))/(1.0+redshift) # Eq 13
-    yval = 1.0/(mvir/(1.0E12/cosmopar[0])) # Eq 23b
-    xintg = cython_fns.massconc_xint(xval,steps)
-    Dx = 2.5 * (cosmopar[3]/cosmopar[2])**(1.0/3.0) * np.sqrt(1.0 + xval**3) * xintg /xval**1.5 # Eq 12
-    Bzero = cmin_prada(xval)/cmin_prada(1.393) # Eq18a
-    Bone  = invsigmin_prada(xval)/invsigmin_prada(1.393) # Eq 18b
-    sigfunc = Dx * 16.9 * yval**0.41 / ( 1.0 + 1.102*(yval**0.20) + 6.22*(yval**0.333) ) # Eq 23a
-    sigdash = Bone * sigfunc  # Eq 15
-    Csigdash = 2.881 * (1.0 + (sigdash/1.257)**1.022) * np.exp(0.060 / sigdash**2)  # Eq 16
-    conc = Bzero * Csigdash
-    return conc
+    conc_CDM = massconc_Ludlow16(mvir, cosmopar, redshift)
+    conc_WDM = conc_CDM * (1. + gam1 * mass_hm / mvir)**(-gam2) * (1. + redshift)**fun_beta(redshift)
+    return conc_WDM
 
-def massconc_Eagle(mvir, redshift=0.0):
-    if redshift != 0.0:
-        raise ValueError("Eagle M-c relation is only valid for z=0.0")
-
-    Ms, cs = np.loadtxt(os.path.join(os.path.dirname(__file__), "data/Mvir_c_Eagle.dat"), unpack=True)
-
-    return np.interp(mvir, Ms, cs)
 
 def get_cosmo(use="planck"):
     if use.lower() == "planck":
         hubble = 0.673
-        Omega_b = 0.02224/hubble**2
+        Omega_b = 0.0491
         Omega_m = 0.315
-        Omega_l = 1.0-Omega_m
+        Omega_l = 1.0 - Omega_m
+    elif use.lower() == "wmap7":
+        hubble = 0.70
+        Omega_b = 0.0469
+        Omega_m = 0.27
+        Omega_l = 1.0 - Omega_m
+    elif use.lower() == "wmap9":
+        hubble = 0.697
+        Omega_b = 0.0461
+        Omega_m = 0.282
+        Omega_l = 1.0 - Omega_m    
     else:
         # Use Planck as default
         hubble = 0.673
-        Omega_b = 0.02224/hubble**2
+        Omega_b = 0.0491
         Omega_m = 0.315
         Omega_l = 1.0-Omega_m
-    cosmopar = np.array([hubble,Omega_b,Omega_l,Omega_m])
-    return cosmopar
+    return np.array([hubble, Omega_b, Omega_l, Omega_m])
+
+
+if __name__ == "__main__":    
+    import matplotlib.pyplot as plt
+
+    Ms = np.logspace(7, 12, 100)
+    zs = np.linspace(0, 3, 100)
+
+    Mgrid, zgrid = np.meshgrid(Ms, zs)
+    cgrid = np.zeros_like(Mgrid)
+    
+    for i in range(len(zs)):
+        cgrid[i] = massconc_Ludlow16(Ms, get_cosmo(), zs[i])
+
+    plt.figure()
+    plt.xscale('log')
+    plt.pcolormesh(Mgrid, zgrid, cgrid)
+    plt.colorbar()
+    plt.show()   
+    
+    cs_CDM = massconc_Ludlow16(Ms, get_cosmo(), 0)
+    cs_WDM = massconc_Bose16(Ms, get_cosmo(), 0)
+    
+    plt.figure()
+    plt.xscale('log')
+    #plt.yscale('log')
+    plt.plot(Ms, cs_CDM)
+    plt.plot(Ms, cs_WDM)
+    plt.show()
+
+    plt.figure()
+    plt.xscale('log')
+    plt.plot(Ms, cs_WDM / cs_CDM)
+    plt.show()
+    
+    
