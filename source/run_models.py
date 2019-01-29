@@ -48,23 +48,15 @@ def init_resume(options, dims):
         where = options['run']['resume']
         if where.lower() == 'last':
             file_idx = len(files) - 1
-        elif where.lower() == 'refine_last':
-            file_idx = len(files) - 1
-            options['refine'] = True
         else:
             try:
                 file_idx = files.index(where)
             except ValueError:
                 logger.log('critical', "Couldn't understand resume command {}".format(where))
                 sys.exit(1)
-        if file_idx < 0:
-            file_idx = len(files) + file_idx
         fname = out_path + files[file_idx]
-        # if we are refining, want to repeat the loaded model not use it to run the next one
-        if where == 'refine_last':
-            model_idx = file_idx
-        else:
-            model_idx = file_idx + 1 # files are 0-indexed, models are 1-indexed
+        model_idx = file_idx + 2 # files are 0-indexed, models are 1-indexed
+                                 # plus an extra 1 to get the *next* model to do
         # Now, work out the indexes through each of the arrays
         # that results in resuming at the right place
         start_idxs = []
@@ -124,7 +116,7 @@ def run_grid(opt, cosmopar, ions, dryrun=False):
         i, j, k, l = models.pop()
         logger.log('info', "###########################")
         logger.log('info', "###########################")
-        logger.log('info', " virialm 10**{2:.2f}  ({0:d}/{1:d})".format(l+1,nummvir, virialm[l]))
+        logger.log('info', " virialm 10**{2:.3f}  ({0:d}/{1:d})".format(l+1,nummvir, virialm[l]))
         logger.log('info', " redshift {2:.2f}     ({0:d}/{1:d})".format(k+1,numreds, redshift[k]))
         logger.log('info', " baryon scale {2:.2f} ({0:d}/{1:d})".format(j+1,numbary, baryscale[j]))
         logger.log('info', " UVB scale {2:.2f}    ({0:d}/{1:d})".format(i+1,numHMscl, HMscale[i]))
@@ -132,8 +124,10 @@ def run_grid(opt, cosmopar, ions, dryrun=False):
         logger.log('info', "###########################")
         if opt['geometry']['concrel'] == "Prada":
             concentration = cosmo.massconc_Prada12(10**virialm[l], cosmopar, redshift[k])
-        elif opt['geometry']['concrel'] == "Eagle":
-            concentration = cosmo.massconc_Eagle(10**virialm[l], redshift[k])
+        elif opt['geometry']['concrel'] == "Ludlow":
+            concentration = cosmo.massconc_Ludlow16(10**virialm[l], cosmopar, redshift[k])
+        elif opt['geometry']['concrel'] == "Bose":
+            concentration = cosmo.massconc_Bose16(10**virialm[l], cosmopar, redshift[k])
         else:
             raise ValueError("Unknown concentration relation")
 
@@ -151,13 +145,6 @@ def run_grid(opt, cosmopar, ions, dryrun=False):
             if ok == True:
                 # model complete
                 prev_fname = res
-                opt['run']['refine'] = False
-            elif ok == 'needs_refine':
-                # model needs reinterpolation
-                prev_fname = res
-                opt['run']['refine'] = True
-                logger.log('info', "High neutral hydrogen fraction detected. Running refinement model next.")
-                models.append((i, j, k, l))
             else:
                 # something went wrong with the model
                 logger.log('error', res)
@@ -167,7 +154,7 @@ def run_grid(opt, cosmopar, ions, dryrun=False):
                     models.pop()
         # once a run over increasing halo masses is complete, clear the previous filename
         # if doing subsequent runs varying other parameters, don't want to load this run's output!
-        if l == nummvir - 1 and opt['run']['refine'] == False:
+        if l == nummvir - 1:
             prev_fname = None
     return
 
@@ -252,14 +239,6 @@ if __name__ == '__main__' or is_jug_running():
     if not is_jug_running():
         opt['run']['pp_para'] = False
 
-    # Whether to rerun the model to get better convergence
-    # This will be set to True by the code whenever a model
-    #   in which the neutral fraction exceeds 1/2 is run
-    # The model will be recomputed using a finer radius
-    #   interpolation about the ionised -> neutral transition region
-    # Then this option is set back to False and the code continues with the next model
-    opt['run']['refine'] = False
-
     # Check output directory exists
     init_outdir(opt)
 
@@ -275,7 +254,7 @@ if __name__ == '__main__' or is_jug_running():
     ions = ['H I', 'D I', 'He I', 'He II']
 
     # Get the working cosmology
-    cosmopar = cosmo.get_cosmo()
+    cosmopar = cosmo.get_cosmo("Planck")
 
     # Do the thing
     # Plane parallel is a special case, because the grid parameters are different
