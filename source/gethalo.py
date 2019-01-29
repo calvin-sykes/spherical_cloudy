@@ -15,7 +15,7 @@ import elemids
 import recomb
 import cosmo
 import misc
-import eagle_coolfunc
+import table_coolfunc
 import cython_fns
 import logger
 from scipy.integrate import trapz as spTrapz, cumtrapz as spCumTrapz
@@ -363,12 +363,44 @@ def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
     chrgtran_HeItargs = chrgtranrate["He I"].keys()
     chrgtran_HeIItargs = chrgtranrate["He II"].keys()
 
-    if temp_method == 'eagle':
+    if temp_method in {'eagle', 'blend'}:
         logger.log("info", "Using Eagle cooling function")
-        cf_interp = eagle_coolfunc.load_eagle_cf(prim_He)
-    elif temp_method in {'relhic', 'blend'}:
+        eagle_cf = table_coolfunc.load_eagle_nHT(prim_He, redshift)
+        # Above call returns the 2D cooling function
+        # Now, construct 1D n_H-T curves for adiabatic and equilibrium cases
+        
+        # use finely interpolated bins to get better accuracy
+        nbins = np.logspace(-7, 1, 1000)
+        Tbins = np.logspace(3, 5, 1000)
+        rates = np.abs(eagle_cf(Tbins, nbins))
+
+        # equilibrium temperature is that minimising net heating/cooling
+        temp_eq = Tbins[np.argmin(rates, axis=0)]
+
+        # adiabatic temperature is that for which 1/rate is the Hubble time
+        # calculated as follows
+        mu = 0.6 # assume fully ionised - ok for low density where this interpolation should be used
+        grddens, grdtemp = np.meshgrid(nbins, Tbins)
+        grdmdens = grddens * protmss * (1 + 4 * prim_He)
+        rates_ad = ((1.5 * kB * grdtemp * protmss) / (mu * grdmdens * (1 - prim_He)**2 * hubb_time))
+
+        # The temperature solution is found by minimising | rates - rates_adiabatic |
+        # This can fail, because the function has two branches for log n_H < -4
+        # We always want the lower branch, so the solution is found by locating the 1st change in sign
+        # of d(| rates - rates_adiabatic |)/dT
+        loc_ad = np.argmax(np.gradient(np.abs(rates - rates_ad), axis=0) >= 0, axis=0)
+        temp_ad = Tbins[loc_ad]
+
+        # this is the adiabatic interpolant to use
+        eagle_interp = spIntUniSpl(nbins, temp_ad)
+
+        # this is the value for n_H for which we should switch from the interpolated to computed equilibrium temperature
+        # found as the density for which the relative difference in T_eq and T_ad is less than 10%
+        density_thresh_ad = nbins[np.argmax((np.abs(temp_eq - temp_ad) / temp_eq) < 0.1)]
+
+    elif temp_method == 'relhic':
         logger.log("info", "Using RELHIC nH-T relation")
-        relhic_interp = eagle_coolfunc.load_relhic_nHT()
+        relhic_interp = table_coolfunc.load_relhic_nHT()
 
     # if string is passed, interpret as filename for the previous run
     # this is used as an initial solution to speed up convergence
@@ -811,7 +843,7 @@ def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
             live_plot.draw('rates', plot_rates)
 
         # If a tabulated cooling function is used, there's no need to calculate any rates
-        if temp_method not in {'eagle', 'relhic', 'isothermal'}: #or (temp_method =='blend' and np.any(densitynH > 10**-4.8)):
+        if temp_method not in {'eagle', 'relhic', 'isothermal'}:
             logger.log("debug", "Calculating heating rate")
             # Construct an array of ionization energies and the corresponding array for the indices
             ionlvl = np.zeros(nions,dtype=np.float)
@@ -841,31 +873,7 @@ def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
             prof_temperature, actual_cool = cython_fns.thermal_equilibrium_full(total_heat, total_cool, old_temperature)
 
         elif temp_method == 'eagle':
-            # Generate a range of temperature values the code is allowed to use
-            temp = np.logspace(3, 4.6, 5000)
-            
-            # Interpolate the cooling function to find cooling rates at each density as a fn of temperature
-            # interp2d returns values in _sorted_ order of the inputs, which is bad
-            # the following trick allows the correct order to be reconstructed
-            order = np.argsort(densitynH)
-            recovery_order = np.argsort(order)
-            #try:
-            #assert np.unique(densitynH[order]).all()
-            #assert np.unique(temp).all()
-            rates = np.abs(cf_interp(densitynH[order], temp, assume_sorted=True))[:,recovery_order]
-            #except ValueError:
-            #    print(densitynH[order], temp)
-
-            grddens, grdtemp = np.meshgrid(densitynH, temp)
-            grdmdens = grddens * protmss * (1 + 4 * prim_He)
-            rates_adiabatic = (1.5 * kB * grdtemp * protmss) / (masspp * grdmdens * (1 - prim_He)**2 * hubb_time)
-
-            # The temperature solution is found by minimising | rates - rates_adiabatic |
-            # This can fail, because the function has two branches for log n_H < -4
-            # We always want the lower branch, so the solution is found by locating the first change in sign
-            # of d(| rates - rates_adiabatic |)/dT
-            loc_adiabatic = np.argmax(np.gradient(np.abs(rates - rates_adiabatic), axis=0) >= 0, axis=0)
-            prof_temperature = temp[loc_adiabatic]
+            prof_temperature = cf_interp(densitynH)
 
         elif temp_method == 'relhic':
             prof_temperature = relhic_interp(densitynH)
@@ -874,11 +882,15 @@ def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
             # below threshold 10**-4.8/cm^3, use the adiabatic result
             # above it, calculate thermal equilibrium
             # use tanh blending function to get smooth transition
-            ad_temp = relhic_interp(densitynH)
-
-            #print(hubb_time)
-            #raw_input()
-            my_ad_temp = hubb_time * (total_heat / (1.5 * densitynH * kB))
+            ad_temp = eagle_interp(densitynH)
+            eq_temp, actual_cool = cython_fns.thermal_equilibrium_full(total_heat, total_cool, old_temperature)
+            loc = None
+            if np.sum((densitynH > density_thresh_ad).astype(np.int)) == 0:
+                # always adiabatic
+                prof_temperature = ad_temp
+            else:
+                loc = np.argmin(np.abs(densitynH - density_thresh_ad))
+                prof_temperature = blendfxgx(ad_temp, eq_temp, loc, 50.0)
 
             if lv_plot:
                 def plot_ad_comp(ax):
@@ -887,18 +899,6 @@ def get_halo(hmodel, redshift, cosmopar=np.array([0.673,0.04910,0.685,0.315]),
                     ax.plot(np.log10(densitynH)[order], my_ad_temp[order], label='me')
                     ax.legend()
                 live_plot.draw('ad_comp', plot_ad_comp)
-
-            #print(ad_temp, my_ad_temp)
-            #raw_input()
-            
-            eq_temp, actual_cool = cython_fns.thermal_equilibrium_full(total_heat, total_cool, old_temperature)
-            if np.any(densitynH > 10**-4.8):
-                loc = np.argmin(np.abs(densitynH - 10**-4.8))
-                prof_temperature = blendfxgx(ad_temp, eq_temp, loc, 50.0)
-                #prof_temperature = blendfxgx(my_ad_temp, eq_temp, loc, 50.0)
-            else:
-                prof_temperature = ad_temp
-                #prof_temperature = my_ad_temp
 
         elif temp_method == 'isothermal':
             pass # gas temperature was set at beginning, leave unchanged

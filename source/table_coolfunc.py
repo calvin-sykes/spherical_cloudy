@@ -2,6 +2,10 @@ import numpy as np
 import scipy.interpolate
 import scipy.optimize
 
+from matplotlib import pyplot as plt
+import matplotlib as mpl
+
+import glob
 # suppress deprecation warning
 import warnings
 warnings.simplefilter(action='ignore', category=FutureWarning)
@@ -11,10 +15,21 @@ del warnings
 
 import logger
 
-interp = None
+def load_eagle_nHT(prim_He, redshift):
+    def extract_z(fn):
+        z = -1
+        try:
+            z = float(fn.rsplit('_', 1)[1].strip('.hdf5'))
+        except ValueError:
+            pass
+        return z
 
-def load_eagle_cf(prim_He):
-    f = h5py.File('/cosma5/data/Eagle/BG_Tables/CoolingTables/z_0.000.hdf5', 'r')
+    files_list = glob.glob('/cosma5/data/Eagle/BG_Tables/CoolingTables/z_*.hdf5')
+    
+    z_arr = np.fromiter(map(extract_z, files_list), float, len(files_list))
+    idx_bestz = np.argmin(np.abs(redshift - z_arr))
+    
+    f = h5py.File(files_list[idx_bestz], 'r')
     data = f['Metal_free']
 
     Tbins = data['Temperature_bins']
@@ -25,14 +40,11 @@ def load_eagle_cf(prim_He):
 
     # find helium mass fraction bin closest to that chosen
     bestY = np.argmin(np.abs(prim_He - Ybins.value))
-    coolY = cool[bestY] #.T
+    coolY = cool[bestY]
+    coolYint = scipy.interpolate.RectBivariateSpline(Tbins, nbins, coolY)
 
-    interp = scipy.interpolate.interp2d(nbins, Tbins, coolY)
+    return coolYint
 
-    #densvals = np.logspace(-7, 0, 1000)
-    #tempvals = np.logspace(3, 6, 1000)
-
-    return interp #tempvals, densvals, np.abs(interp(tempvals, densvals))
 
 def load_relhic_nHT():
     dens, temp = np.loadtxt('./data/relhic_nHT.dat', unpack=True)
@@ -50,5 +62,4 @@ def load_relhic_nHT():
     extrap_temp = np.append(temp, 10**plaw_fit(extrapolation_region, *fit_params))
 
     interp = scipy.interpolate.InterpolatedUnivariateSpline(extrap_dens, extrap_temp)
-
     return interp
