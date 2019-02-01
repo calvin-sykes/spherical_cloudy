@@ -883,7 +883,7 @@ def get_halo(hmodel, redshift, cosmopar=cosmo.get_cosmo(),
 
         prof_temperature = 0.7 * prof_temperature + 0.3 * old_temperature
 
-        if iteration >= 100 #and iteration%1 == 0:
+        if iteration >= 100: #and iteration%1 == 0:
             logger.log("info", "Averaging the stored Yprofs")
             Yprofs = np.mean(store_Yprofs, axis=2)
 

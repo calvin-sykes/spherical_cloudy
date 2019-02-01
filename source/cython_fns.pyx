@@ -1,11 +1,6 @@
 #-*- mode: python -*-
 # cython: profile=False
 
-# To get this running, you must do the following at the command line:
-# python arb_prec_setup.py build_ext --inplace
-# although I'm not really sure what the --inplace does, I think it means "only valid for this directory"
-#
-
 import numpy as np
 cimport numpy as np
 cimport cython
@@ -14,7 +9,7 @@ ctypedef np.float_t DTYPE_t
 ITYPE = np.int64
 ctypedef np.int_t ITYPE_t
 
-from cpython cimport bool
+cimport cython_halo
 
 cdef extern from "math.h":
     double csqrt "sqrt" (double) nogil
@@ -854,7 +849,7 @@ cdef double Cored_fm(double x) nogil:
 def pressure(double[::1] temp not None,
              double[::1] radius not None,
              double[::1] mpp not None,
-             hmodel,
+             cython_halo.HaloModel hmodel,
              double bturb,
              double Gcons, double kB, double mH):
     """
@@ -871,14 +866,14 @@ def pressure(double[::1] temp not None,
     cdef char* name
     cdef fp_massint fm
 
-    if hmodel.name == "NFW":
-        fm = &NFW_fm
-    elif hmodel.name == "Burkert":
-        fm = &Burkert_fm
-    elif hmodel.name == "Cored":
-        fm = &Cored_fm
-        global acore
-        acore = hmodel.acore
+    # if hmodel.name == "NFW":
+    #     fm = &NFW_fm
+    # elif hmodel.name == "Burkert":
+    #     fm = &Burkert_fm
+    # elif hmodel.name == "Cored":
+    #     fm = &Cored_fm
+    #     global acore
+    #     acore = hmodel.acore
 
     rhods = hmodel.rhods
     rscale = hmodel.rscale
@@ -905,9 +900,10 @@ def pressure(double[::1] temp not None,
                 cssqa = (((kB/mH)*temp[x+1])/mpp[x+1]) + (0.75*bturb*bturb)
                 cssqb = (((kB/mH)*temp[x])/mpp[x]) + (0.75*bturb*bturb)
                 if xvalb == 0.0:
-                    xint += 0.5*(fm(xvala)/(cssqa*xvala*xvala)) * (xvala-xvalb)
+                    xint += 0.5*(hmodel.fm(xvala)/(cssqa*xvala*xvala)) * (xvala-xvalb)
                 else:
-                    xint += 0.5*((fm(xvala)/(cssqa*xvala*xvala)) + fm(xvalb)/(cssqb*xvalb*xvalb)) * (xvala-xvalb)
+                    xint += 0.5*((hmodel.fm(xvala)/(cssqa*xvala*xvala)) +
+                                 hmodel.fm(xvalb)/(cssqb*xvalb*xvalb)) * (xvala-xvalb)
             retarr[r] = cexp(-vssq*xint)
         retarr[0] = 1.0
     return np.asarray(retarr)

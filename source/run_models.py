@@ -137,8 +137,8 @@ def run_grid(opt, cosmopar, ions, dryrun=False):
                                     10**virialm[l] * somtog,
                                     baryfrac[l] * baryscale[j],
                                     rhocrit,
-                                    concentration,
-                                    acore=opt['geometry']['acore'])
+                                    concentration)
+                                    #acore=opt['geometry']['acore'])
         # Let's go!
         if not dryrun:
             ok, res = gethalo.get_halo(model, redshift[k], cosmopar, ions, prevfile=prev_fname, options=opt)

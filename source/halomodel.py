@@ -1,70 +1,38 @@
-import numpy as np
+import cython_halo as chalo
+
 import sys
-
 import logger
+import numpy as np
 
-class HaloModel:
-    def __init__(self, virial_mass, baryon_frac, rho_crit, conc):
-        self.mvir = virial_mass
-        self.rvir = (3.0 * virial_mass / (4.0 * np.pi * 200.0 * rho_crit))**(1.0/3.0)
-        self.rscale = self.rvir / conc
-        self.baryfrac = baryon_frac
-        self.rhods = 200.0 * rho_crit * conc**3 / self.fm(conc)
-
-    def fm(self, x):
-        """Return f_M(x) s.t. M(<r) = (4 * pi * rho_s * (r_s)**3 / 3) * f_M(x)"""
-        raise NotImplementedError("fm is not defined for base class")
-
-
-class NFWHalo(HaloModel):
-    """NFW halo with rho(x) = rho_s / (x * (1 + x)**2) for x = r/r_s"""
-    def __init__(self, virial_mass, baryon_frac, rho_crit, conc, **kwargs):
-        HaloModel.__init__(self, virial_mass, baryon_frac, rho_crit, conc)
-        self.name = 'NFW'
-
-    def fm(self, x):
-        return 3.0 * (np.log(1.0 + x) - x / (1.0 + x))
-
-
-class BurkertHalo(HaloModel):
-    """Burkert halo with rho(x) = (rho_0 * (r_0)**3) / ((r + r_0) * (r**2 + (r_0)**2)) for x = r/r_0"""
-    def __init__(self, virial_mass, baryon_frac, rho_crit, conc, **kwargs):
-        HaloModel.__init__(self, virial_mass, baryon_frac, rho_crit, conc)
-        self.name = 'Burkert'
-
-    def fm(self, x):
-        return 1.5 * (0.5 * np.log(1.0 + x**2.0) + np.log(1.0+x) - np.arctan(x))
-
-
-class CoredHalo(HaloModel):
-    """Modified isothermal halo with rho(x) = rho_0 / (1 + (r / r_c)**2) for x = r / r_c"""
-    def __init__(self, virial_mass, baryon_frac, rho_crit, conc, acore):
-        HaloModel.__init__(self, virial_mass, baryon_frac, rho_crit, conc)
-        self.acore = acore
-        self.name = 'Cored'
-
-    def fm(self, x):
-        return 3.0 * (x / ((self.acore-1.0) * (1.0 + x))
-                      + (self.acore**2.0 * np.log(1.0 + x / self.acore)
-                         + (1.0 - 2.0*self.acore) * np.log(1.0 + x)) / (1.0 - self.acore)**2.0 )
-
-
-class PPHalo(HaloModel):
-    def __init__(self, coldens, dens):
-        self.cden = coldens
-        self.density = dens
-        self.name = 'PP'
-
-
-func_map = {'NFW'     : NFWHalo,
-            'Burkert' : BurkertHalo,
-            'Cored'   : CoredHalo,
-            'PP'      : PPHalo }
+init_map = {'NFW'     : chalo.NFWHalo,
+            'Burkert' : chalo.BurkertHalo,
+            #'Cored'   : chalo.CoredHalo,
+            'PP'      : chalo.PPHalo }
 
 
 def make_halo(name, *args, **kwargs):
+    """
+    Return a halo model object of type 'name' (i.e. NFW or Burkert).
+    Args are (virial_mass, baryon_frac, rho_crit, conc)
+    Attributes are accessible from Python but mass function isn't.
+    Use the below helper function to get this.
+    """
     try:
-        return func_map[name](*args, **kwargs)
+        return init_map[name](*args, **kwargs)
     except KeyError:
         logger.log('critical', "Halo model {} is invalid.".format(name))
         sys.exit(1)
+
+
+def fm(hm, x):
+    """
+    Return the mass function to Python code.
+    Args are a HaloModel object and the value x = r/r_s (or arraylike of values) to evaluate f_M at.
+    """
+    if hasattr(x, '__iter__'):
+        ret = np.zeros_like(x)
+        for i in range(ret.shape[0]):
+            ret[i] = chalo.get_fm(hm, x[i])
+        return ret
+    else:
+        return chalo.get_fm(hm, x)
