@@ -1,6 +1,6 @@
 """
 See the following website for the relevant data
-http://www-cfadc.phy.ornl.gov/astro/ps/data/
+https://web.archive.org/web/20160526002340/http://www-cfadc.phy.ornl.gov/astro/ps/data/
 """
 import numpy as np
 import misc
@@ -90,11 +90,6 @@ def rate_function_arr_break(temp, arr):
     wz = np.where(rate<0.0)
     rate[wz] = 0.0
     return rate
-
-
-
-
-
 
 def rate_function(temp, a, b, c, d, tmin, tmax):
     rate = 1.0E-9 * a * ((temp/1.0E4)**b) * (1.0 + c*np.exp(d*temp/1.0E4))

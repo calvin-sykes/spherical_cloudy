@@ -1,12 +1,16 @@
 import misc
+from collections import namedtuple
+import os
 
-def abundances(elem, scale):
+ElemID = namedtuple('ElemID', ['id', 'abund', 'ip'])
+
+def abundances(elem, scale, Hescale):
     # If scale is a log10 value, convert to linear
     if scale < 0.0: scale = 10.0**scale
     # Set the number abundance of each element
     if elem == "H": abund = 1.0
     elif elem == "D": abund = 10.0**(-4.60)
-    elif elem == "He": abund = 1.0/12.0
+    elif elem == "He": abund = Hescale * 1.0/12.0
     elif elem == "Li": abund = 10.0**(2.70-12.0)
     elif elem == "C": abund = scale * 10.0**(8.43-12.0)
     elif elem == "N": abund = scale * 10.0**(7.83-12.0)
@@ -26,7 +30,7 @@ def ionization_potential(ion):
     Ionization energies of each element/ion from:
     http://physics.nist.gov/PhysRefData/ASD/ionEnergy.html
     """
-    data = open("data/atomic_ip.dat",'r').readlines()
+    data = open(os.path.join(os.path.dirname(__file__), "data/atomic_ip.dat"),'r').readlines()
     ip = None
     for i in range(len(data)):
         if data[i][0] == "#": continue
@@ -63,27 +67,19 @@ def ionization_potential(ion):
 #		print ion, ip
     return ip
 
-def getids(useelems, scale=1.0):
+def getids(useelems, scale=1.0, Hescale=1.0):
     iddict = dict({})
     elems = ["H", "D", "He", "Li", "C", "N", "O", "Mg", "Al", "Si", "Ar", "Fe"]
     ionlv = [1,1,2,3,6,7,8,12,13,14,18,26]
-    # Add some "required" elements, but set their abundance to zero
-    zeroabund = []
-#	if "D I" not in useelems:
-#		zeroabund += ["D I"]
-#		useelems  += ["D I"]
     # Now fill in the dictionary
     for e in range(len(elems)):
-        abund = abundances(elems[e],scale)
+        abund = abundances(elems[e],scale, Hescale)
         for i in range(ionlv[e]):
             strval = elems[e] + " " + misc.numtorn(i+1)
             ip = ionization_potential(strval)
             if strval in useelems:
                 for k in range(len(useelems)):
                     if useelems[k] == strval:
-                        iddict[strval] = [k,abund,ip]
+                        iddict[strval] = ElemID(k,abund,ip)
                         break
-    for i in range(len(zeroabund)):
-        e = zeroabund[i]
-        iddict[e] = [iddict[e][0],0.0,iddict[e][2]]
-    return iddict, zeroabund
+    return iddict

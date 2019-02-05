@@ -4,6 +4,7 @@ http://www-cfadc.phy.ornl.gov/astro/ps/data/
 """
 import numpy as np
 import misc
+import os
 
 def rate_function_arr(engy, arr):
     Et, Emx, Eo, so, ya, P, yw, yo, y1 = arr[0], arr[1], arr[2], arr[3], arr[4], arr[5], arr[6], arr[7], arr[8]
@@ -63,7 +64,7 @@ def load_data(elidx):
     print info["C IV"]
     """
     datadict = dict({})
-    data = np.loadtxt("data/phionxsec.dat")
+    data = np.loadtxt(os.path.join(os.path.dirname(__file__), "data/phionxsec.dat"))
     ekeys = elidx.keys()
     for i in range(data.shape[0]):
         elem = misc.numtoelem(int(data[i,0]))
