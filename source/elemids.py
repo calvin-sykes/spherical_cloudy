@@ -10,8 +10,13 @@ def abundances(elem, scale, Hescale):
     # Set the number abundance of each element
     if elem == "H": abund = 1.0
     elif elem == "D": abund = 10.0**(-4.60)
-    elif elem == "He": abund = Hescale * 1.0/12.0
-    elif elem == "Li": abund = 10.0**(2.70-12.0)
+    elif elem == "He":
+        # He scale is fractional change in helium mass fraction Y
+        # Need to convert to give change in helium number abundance y
+        prim_He_mass = 0.25
+        abund = prim_He_mass * Hescale / (4 - 4 * prim_He_mass * Hescale)
+        print(abund)
+    elif elem == "Li": abund = scale * 10.0**(2.70-12.0)
     elif elem == "C": abund = scale * 10.0**(8.43-12.0)
     elif elem == "N": abund = scale * 10.0**(7.83-12.0)
     elif elem == "O": abund = scale * 10.0**(8.69-12.0)

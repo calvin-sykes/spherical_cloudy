@@ -8,7 +8,7 @@ import matplotlib as mpl
 import glob
 # suppress deprecation warning
 import warnings
-warnings.simplefilter(action='ignore', category=FutureWarning)
+#warnings.simplefilter(action='ignore', category=FutureWarning)
 import h5py
 #warnings.resetwarnings()
 del warnings
@@ -39,7 +39,7 @@ def load_eagle_nHT(prim_He, redshift):
     cool = data['Net_Cooling']
 
     # find helium mass fraction bin closest to that chosen
-    bestY = np.argmin(np.abs(prim_He - Ybins.value))
+    bestY = np.argmin(np.abs(prim_He - Ybins[...]))
     coolY = cool[bestY]
     coolYint = scipy.interpolate.RectBivariateSpline(Tbins, nbins, coolY)
 
