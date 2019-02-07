@@ -404,30 +404,30 @@ def get_halo(hmodel, redshift, cosmopar=cosmo.get_cosmo(),
             tdata = np.load(prevfile)
             # if the data is stored as a 'structured' array (one with fieldnames)
             # then it needs to be viewed as a plain array to select individual columns
-            if tdata.dtype.names is not None:
-                tdata = tdata.view(tdata.dtype[0])
-            strt = 6
-            numarr = tdata.shape[1]
-            arridx = dict({})
-            arridx["voldens"] = dict({})
-            arridx["coldens"] = dict({})
-            for i in range((numarr-strt)/3):
-                arridx["voldens"][ions[i]] = strt + i
-                arridx["coldens"][ions[i]] = strt + i + (numarr-strt)/2
+            #if tdata.dtype.names is not None:
+            #    tdata = tdata.view(tdata.dtype[0])
+            #strt = 6
+            #numarr = tdata.shape[1]
+            #arridx = dict({})
+            #arridx["voldens"] = dict({})
+            #arridx["coldens"] = dict({})
+            #for i in range((numarr-strt)/3):
+            #    arridx["voldens"][ions[i]] = strt + i
+            #    arridx["coldens"][ions[i]] = strt + i + (numarr-strt)/2
             prof_coldens = np.zeros((nions,npts,nummu))
             prof_density = np.zeros((nions,npts))
             Yprofs = np.zeros((nions,npts))
 
-            old_radius = tdata[:,0] / cmtopc
+            old_radius = tdata["rad"].squeeze() / cmtopc #:,0] / cmtopc
             # redefine radius to have fine interpolation across ionised -> neutral transition region
             # and resample quantities onto this new set of radii
             radius = get_radius(hmodel.rvir, geomscale, npts, method=radmethod)
 
             # resample quantities from old radial coordinates to new ones
-            prof_temperature = np.interp(radius, old_radius, tdata[:,1])
-            temp_densitynH = np.interp(radius, old_radius, tdata[:,2])
+            prof_temperature = np.interp(radius, old_radius, tdata["temp"].squeeze()) #[:,1])
+            temp_densitynH = np.interp(radius, old_radius, tdata["hden"].squeeze()) #[:,2])
             for j in range(nions):
-                prof_density[j] = np.interp(radius, old_radius, tdata[:,arridx["voldens"][ions[j]]])
+                prof_density[j] = np.interp(radius, old_radius, tdata["vden"].squeeze()[:,j])#tdata[:,arridx["voldens"][ions[j]]])
                 if elID[ions[j]].abund > 0.0:
                     Yprofs[j] = prof_density[j] / (temp_densitynH * elID[ions[j]].abund)
                 else:
