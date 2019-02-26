@@ -159,8 +159,8 @@ class LivePlot:
             logger.log('warning', "No live figures to show")
 
     def close(self):
-        for name in list(self.figures.iterkeys()):
-            plt.close(self.figures[name])
+        for name, fig in self.figures.iteritems():
+            plt.close(fig)
             del self.figures[name]
         plt.ioff()
 
