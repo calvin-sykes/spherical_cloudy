@@ -86,19 +86,17 @@ def run_grid(opt, cosmopar, ions, dryrun=False):
     virialm   = gridparams['virialm'  ]
     redshift  = gridparams['redshift' ]
     baryscale = gridparams['baryscale']
-    HMscale   = gridparams['radscale' ]
     
-    nummvir, numreds, numbary, numHMscl = map(len, [virialm, redshift, baryscale, HMscale])
+    nummvir, numreds, numbary = map(len, [virialm, redshift, baryscale])
 
-    prev_fname, (smvir, sHMscl, sbary, sreds) = init_resume(opt, [nummvir, numreds, numbary, numHMscl])
+    prev_fname, (smvir, sbary, sreds) = init_resume(opt, [nummvir, numreds, numbary])
 
     # build list of parameters for each model to run
     models = []
     for i in range(sreds, numreds):     
         for j in range(sbary, numbary):
-            for k in range(sHMscl, numHMscl):
-                for l in range(smvir, nummvir):
-                    models.append((i, j, k, l))
+            for l in range(smvir, nummvir):
+                models.append((i, j, l))
     models.reverse()
 
     # Load baryon fraction as a function of halo mass
@@ -113,13 +111,13 @@ def run_grid(opt, cosmopar, ions, dryrun=False):
     somtog = const['somtog']
     
     while models:
-        i, j, k, l = models.pop()
+        j, k, l = models.pop()
         logger.log('info', "###########################")
         logger.log('info', "###########################")
         logger.log('info', " virialm 10**{2:.3f}  ({0:d}/{1:d})".format(l+1,nummvir, virialm[l]))
         logger.log('info', " redshift {2:.2f}     ({0:d}/{1:d})".format(k+1,numreds, redshift[k]))
         logger.log('info', " baryon scale {2:.2f} ({0:d}/{1:d})".format(j+1,numbary, baryscale[j]))
-        logger.log('info', " UVB scale {2:.2f}    ({0:d}/{1:d})".format(i+1,numHMscl, HMscale[i]))
+        #logger.log('info', " UVB scale {2:.2f}    ({0:d}/{1:d})".format(i+1,numHMscl, HMscale[i]))
         logger.log('info', "###########################")
         logger.log('info', "###########################")
         if opt['geometry']['concrel'] == "Prada":
