@@ -15,7 +15,7 @@ def make_halo(name, *args, **kwargs):
     Return a halo model object of type 'name' (i.e. NFW or Burkert).
     Args are (virial_mass, baryon_frac, rho_crit, conc)
     Attributes are accessible from Python but mass function isn't.
-    Use the below helper function to get this.
+    Use the helper function halo_model.fm() to get this.
     """
     try:
         return init_map[name](*args, **kwargs)
@@ -26,7 +26,7 @@ def make_halo(name, *args, **kwargs):
 
 def fm(hm, x):
     """
-    Return the mass function to Python code.
+    Evaluates the (C-implemented) mass function and returns the result to Python code.
     Args are a HaloModel object and the value x = r/r_s (or arraylike of values) to evaluate f_M at.
     """
     if hasattr(x, '__iter__'):

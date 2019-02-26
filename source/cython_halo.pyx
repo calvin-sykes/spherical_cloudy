@@ -35,7 +35,6 @@ cdef class NFWHalo(HaloModel):
 cdef class BurkertHalo(HaloModel):
     """Burkert halo with rho(x) = (rho_0 * (r_0)**3) / ((r + r_0) * (r**2 + (r_0)**2)) for x = r/r_0"""
     def __init__(self, virial_mass, baryon_frac, rho_crit, conc=None, r_zero=None):
-        #cnew
         if r_zero is not None:
             # Use provided r0 and determine c200
             assert conc is None
