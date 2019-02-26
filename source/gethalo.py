@@ -1034,9 +1034,10 @@ def get_halo(hmodel, redshift, cosmopar=cosmo.get_cosmo(),
                                  Yprofs.T), axis=1)
 
     if He_want_wls is not None:
-        save_dtype.extend([('HeI_{:.0f}'.format(wl), 'float64') for wl in He_want_wls]) # TODO: list of HeI lines to save
+        save_dtype.extend([('HeII_4686', 'float64')] + [('HeI_{:.0f}'.format(wl), 'float64') for wl in He_want_wls]) # TODO: list of HeI lines to save
 
         tmpout = np.concatenate((tmpout,
+                                 HeII_SB.reshape((npts,1)),
                                  He_SB.T), axis=1)
 
     if svrates:

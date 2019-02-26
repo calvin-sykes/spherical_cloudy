@@ -1,5 +1,7 @@
 import numpy as np
 
+import logger
+
 def numtorn(cnt,subone=False):
     """
     Convert cnt to a roman numeral
@@ -9,7 +11,7 @@ def numtorn(cnt,subone=False):
     sb = 0
     if subone: sb = 1
     if (cnt > 55) or (cnt+sb < 1):
-        print "ERROR :: Roman numerals > 30 (and < 1) are not implemented"
+        logger.log('error', "Roman numerals > 30 (and < 1) are not implemented")
     if cnt == 1-sb:
         return "I"
     elif cnt == 2-sb:
@@ -166,7 +168,7 @@ def numtoelem(cnt,subone=False):
     if subone: sb = 1
     if (cnt > 30) or (cnt < 1):
         if cnt not in [36,42,54]:
-            print "ERROR :: Elements with atomic number > 30 (and < 1) are not implemented"
+            logger.log('error', "Elements with atomic number > 30 (and < 1) are not implemented")
     if cnt == 1-sb:
         return "H"
     elif cnt == 2-sb:
@@ -234,7 +236,7 @@ def numtoelem(cnt,subone=False):
     elif cnt == 54-sb:
         return "Xe"
     else:
-        print "ERROR :: could not find element", cnt
+        logger.log('error', "Could not find element {}".format(cnt))
     return None
 
 def calc_yprofs(ions,rates,elID):
