@@ -1,8 +1,10 @@
 import numpy as np
-import cython_fns
 from matplotlib import pyplot as plt
+
+import cython_fns
 import constants
 import logger
+
 import os
 
 def HMredshifts(version='12'):
@@ -117,18 +119,31 @@ def _HM_background_impl(elID,redshift, version, alpha_UV):
 def HM_fiducial(elID,redshift, version):
     return _HM_background_impl(elID, redshift, version, 0.0)[0]
 
-def AGN(elID):
-    nu, Jnu = np.loadtxt(os.path.join(os.path.dirname(__file__), "data/radfields/agn_n4.radfield"), usecols=(0,1), unpack=True)
-    Jnu /= nu # nu J_nu is output by Cloudy
+def AGN(elID, intensity=1.0):
+    """
+    Use an ionising radiation field with shape given by Cloudy's AGN SED.
+    The optional intensity factor is relative to the z = 0 Madau & Haardt (2015) UVB.
+    """
+    wl, nuJnu = np.loadtxt(os.path.join(os.path.dirname(__file__), "data/radfields/agn_n4.radfield"), usecols=(0,1), unpack=True)
+    nu = 299792458.0 / (wl * 1e-10)
+    Jnu = nuJnu / (4 * np.pi * nu) # 4 pi nu J_nu is output by Cloudy
 
     # Now load the HM spectrum to get the same frequency scale
-    HMdata = np.loadtxt(os.path.join(os.path.dirname(__file__), "data/radfields/HM12_UVB.dat"), usecols=tuple(range(60)))
+    HMdata = np.loadtxt(os.path.join(os.path.dirname(__file__), "data/radfields/HM15_UVB.dat"), usecols=tuple(range(60)))
     rdshlist = HMdata[0,:]
-    amin = np.argmin(np.abs(rdshlist-0.0))
-    waveAt, Jnut = HMdata[1:,0], HMdata[1:,amin]
-    waveA = waveAt[1:]*1.0E-10
-    nu_HM = 299792458.0/waveA
+    amin = np.argmin(np.abs(rdshlist - 0.0))
+    wl_HM, Jnu_HM = HMdata[1:,0], HMdata[1:,amin+1]
+    wl_HM *= 1.0E-10
+    nu_HM = 299792458.0 / wl_HM
     Jnu = np.interp(nu_HM, nu, Jnu)
+    
+    # Now normalise the intensities
+    argsrt = np.argsort(nu_HM)
+    I_HM = np.trapz(4 * np.pi * Jnu_HM[argsrt], nu_HM[argsrt])
+    I = np.trapz(4 * np.pi * Jnu[argsrt], nu_HM[argsrt])
+    norm = (I_HM / I) * intensity
+    Jnu *= norm 
+    
     # Extra interpolation for IPs
     nu, Jnu, _ = extra_interp(elID, nu_HM, Jnu)
     

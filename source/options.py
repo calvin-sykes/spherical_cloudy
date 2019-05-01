@@ -86,7 +86,9 @@ def default(save=False):
     physpar['bturb'  ] = 0.0        # Value of turbulent Doppler parameter in km/s
     physpar['metals' ] = 1.0E-3     # metallicity relative to solar
     physpar['gastemp'] = 20000      # initial gas temperature in Kelvin
-    physpar['hescale'] = 1.0        # Constant to scale the helium abundance by
+    physpar['hescale'] = 1.0        # Constant to scale the helium mass fraction Y by
+                                    # Internally, a new value of the number abundance is calculated: y = (Y_P * Hescale) / (4 - 4 * Y_P * Hescale)
+                                    # Default value of 1 gives primordial values y_P = 0.083, Y_P = 0.25
     options['phys'   ] = physpar
 
     # Set grid of parameters

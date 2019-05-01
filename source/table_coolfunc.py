@@ -2,16 +2,18 @@ import numpy as np
 import scipy.interpolate
 import scipy.optimize
 
+import h5py
 from matplotlib import pyplot as plt
 import matplotlib as mpl
 
 import glob
+import os
+
 # suppress deprecation warning
-import warnings
-warnings.simplefilter(action='ignore', category=FutureWarning)
-import h5py
+#import warnings
+#warnings.simplefilter(action='ignore', category=FutureWarning)
 #warnings.resetwarnings()
-del warnings
+#del warnings
 
 import logger
 
@@ -24,7 +26,7 @@ def load_eagle_nHT(prim_He, redshift):
             pass
         return z
 
-    files_list = glob.glob('/cosma5/data/Eagle/BG_Tables/CoolingTables/z_*.hdf5')
+    files_list = glob.glob(os.path.join(os.path.dirname(__file__), "data/CoolingTables/z_*.hdf5"))
     
     z_arr = np.fromiter(map(extract_z, files_list), float, len(files_list))
     idx_bestz = np.argmin(np.abs(redshift - z_arr))
@@ -39,7 +41,7 @@ def load_eagle_nHT(prim_He, redshift):
     cool = data['Net_Cooling']
 
     # find helium mass fraction bin closest to that chosen
-    bestY = np.argmin(np.abs(prim_He - Ybins.value))
+    bestY = np.argmin(np.abs(prim_He - Ybins[...]))
     coolY = cool[bestY]
     coolYint = scipy.interpolate.RectBivariateSpline(Tbins, nbins, coolY)
 
