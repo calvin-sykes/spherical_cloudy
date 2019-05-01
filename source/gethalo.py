@@ -77,24 +77,6 @@ def blendfxgx(f, g, xover, smooth):
     return smooth * f + (1 - smooth) * g
 
 
-def mpcoldens(j, prof, radius, nummu, geom):
-    if geom in {"NFW", "Burkert", "Cored"}:
-        coldens, muarr = cython_fns.calc_coldens(prof, radius, nummu)
-        return [j,coldens,muarr]
-    elif geom == "PP":
-        coldens = cython_fns.calc_coldensPP(prof, radius)
-        return [j,coldens]
-    else:
-        logger.log("critical", "Geometry {0:s} is not allowed".format(geom))
-        sys.exit(1)
-    return
-
-
-def mpphion(j, jnurarr, phelxs, nuzero, planck):
-    phionxsec = 4.0*np.pi * cython_fns.phionrate(jnurarr, phelxs, nuzero, planck)
-    return [j,phionxsec]
-
-
 def get_radius(virialr, scale, npts, method=0, **kwargs):
     if method == 0:
         # Linear scaling
@@ -243,10 +225,9 @@ def get_halo(hmodel, redshift, cosmopar=cosmo.get_cosmo(),
 
     # How many ions do we need to calculate
     nions = len(ions)
-    # if ncpus > nions: ncpus = nions
-    # if ncpus > mpCPUCount(): ncpus = mpCPUCount()
-    # if ncpus <= 0: ncpus += mpCPUCount()
-    # if ncpus <= 0: ncpus = 1
+
+    # make thread pool if using >1 CPUs
+    cython_fns.set_num_threads(ncpus)
     logger.log("info", "Using {0:d} CPUs".format(int(ncpus)))
 
     # You can create plots that will update asynchronously while the code runs
@@ -255,9 +236,6 @@ def get_halo(hmodel, redshift, cosmopar=cosmo.get_cosmo(),
     # To show the plot, use the live_plot.show() function, which takes a name identifier and the plotting function
     if lv_plot:
         live_plot = LivePlot()
-
-    # make thread pool if using >1 CPUs
-    cython_fns.set_num_threads(ncpus)
 
     # Get the primordial number abundance of He relative to H
     # (Scaling has been moved to elemids.py)
@@ -532,7 +510,7 @@ def get_halo(hmodel, redshift, cosmopar=cosmo.get_cosmo(),
         if geom in {"NFW", "Burkert", "Cored"}:
             prof_coldens, muarr = cython_fns.calc_coldens_allion(prof_density, radius, nummu)
         else:
-            prof_coldens = cython_fns.calc_coldens_PP_allion(prof_density, radius)
+            prof_coldens = cython_fns.calc_coldensPP_allion(prof_density, radius)
 
         # integrate over all angles,
         if geom in {"NFW", "Burkert", "Cored"}:

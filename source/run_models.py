@@ -4,13 +4,15 @@ import shutil
 import sys
 import traceback
 
+from mpi4py import MPI
+from mpi4py.futures import MPIPoolExecutor
+
 import halomodel
 import gethalo
 import options
 import constants
 import cosmo
 import logger
-from jug import Task, is_jug_running
 
 # Check the output directory exists, create it if not
 def init_outdir(options):
@@ -55,8 +57,7 @@ def init_resume(options, dims):
                 logger.log('critical', "Couldn't understand resume command {}".format(where))
                 sys.exit(1)
         fname = out_path + files[file_idx]
-        model_idx = file_idx + 2 # files are 0-indexed, models are 1-indexed
-                                 # plus an extra 1 to get the *next* model to do
+        model_idx = file_idx + 1 # plus an extra 1 to get the *next* model to do
         # Now, work out the indexes through each of the arrays
         # that results in resuming at the right place
         start_idxs = []
@@ -64,6 +65,7 @@ def init_resume(options, dims):
             divisor = 1
             for j in range(0, i):
                 divisor *= dims[j]
+                print(j, divisor)
             start_idxs.append((model_idx // divisor) % dims[i])
     return fname, start_idxs
 
@@ -95,8 +97,8 @@ def run_grid(opt, cosmopar, ions, dryrun=False):
     models = []
     for i in range(sreds, numreds):     
         for j in range(sbary, numbary):
-            for l in range(smvir, nummvir):
-                models.append((i, j, l))
+            for k in range(smvir, nummvir):
+                models.append((i, j, k))
     models.reverse()
 
     # Load baryon fraction as a function of halo mass
@@ -117,7 +119,6 @@ def run_grid(opt, cosmopar, ions, dryrun=False):
         logger.log('info', " virialm 10**{2:.3f}  ({0:d}/{1:d})".format(l+1,nummvir, virialm[l]))
         logger.log('info', " redshift {2:.2f}     ({0:d}/{1:d})".format(k+1,numreds, redshift[k]))
         logger.log('info', " baryon scale {2:.2f} ({0:d}/{1:d})".format(j+1,numbary, baryscale[j]))
-        #logger.log('info', " UVB scale {2:.2f}    ({0:d}/{1:d})".format(i+1,numHMscl, HMscale[i]))
         logger.log('info', "###########################")
         logger.log('info', "###########################")
         if opt['geometry']['concrel'] == "Prada":
@@ -131,7 +132,7 @@ def run_grid(opt, cosmopar, ions, dryrun=False):
 
         hubpar = cosmo.hubblepar(redshift[k], cosmopar)
         rhocrit = 3.0*(hubpar*hztos)**2/(8.0*np.pi*Gcons)
-        model = halomodel.make_halo(opt['geometry']['profile'],
+        hmodel = halomodel.make_halo(opt['geometry']['profile'],
                                     10**virialm[l] * somtog,
                                     baryfrac[l] * baryscale[j],
                                     rhocrit,
@@ -139,7 +140,7 @@ def run_grid(opt, cosmopar, ions, dryrun=False):
                                     #acore=opt['geometry']['acore'])
         # Let's go!
         if not dryrun:
-            ok, res = gethalo.get_halo(model, redshift[k], cosmopar, ions, prevfile=prev_fname, options=opt)
+            ok, res = gethalo.get_halo(hmodel, redshift[k], cosmopar, ions, prevfile=prev_fname, options=opt)
             if ok == True:
                 # model complete
                 prev_fname = res
@@ -183,14 +184,13 @@ def run_grid_PP(opt, cosmopar, ions, dryrun=False):
 
     while models:
         i, j, k = models.pop()
-        model = halomodel.make_halo(opt['geometry']['profile'],
+        hmodel = halomodel.make_halo(opt['geometry']['profile'],
                                     10.0**coldens[j],
                                     10.0**density[i])
         # Let's go!
         if not dryrun:
             if useMP:
-                tasks.append(Task(gethalo.get_halo, hmodel=model, redshift=redshift[k], cosmopar=cosmopar,
-                                  ions=ions, prevfile=None, options=opt))
+                tasks.append((hmodel, redshift[k], cosmopar, ions, None, opt))
             else:
                 logger.log('info', "###########################")
                 logger.log('info', "###########################")
@@ -199,10 +199,14 @@ def run_grid_PP(opt, cosmopar, ions, dryrun=False):
                 logger.log('info', " redshift {2:.2f}      ({0:d}/{1:d})".format(k+1,numreds, redshift[k]))
                 logger.log('info', "###########################")
                 logger.log('info', "###########################")
-                ok, res = gethalo.get_halo(model, redshift[k], cosmopar, ions, prevfile=None, options=opt)
+                ok, res = gethalo.get_halo(hmodel, redshift[k], cosmopar, ions, prevfile=None, options=opt)
                 if ok != True:
                     # something went wrong with the model
                     logger.log('error', res)
+    # If using MPI parallelism, dispatch the tasks to worker processes
+    if useMP:
+        with MPIPoolExecutor() as executor:
+            executor.starmap(gethalo.get_halo, tasks, chunksize=10)
     return
 
 
@@ -210,7 +214,7 @@ def run_grid_PP(opt, cosmopar, ions, dryrun=False):
 ## START HERE ##
 ################
 
-if __name__ == '__main__' or is_jug_running():
+if __name__ == '__main__':
     # Load input file using first argument as filename
     try:
         input_file = sys.argv[1]
@@ -232,10 +236,6 @@ if __name__ == '__main__' or is_jug_running():
         opt['log']['level'] = sys.argv[3]
     except IndexError:
         pass
-    
-    # if running from interactive shell disable Jug parallel processing
-    if not is_jug_running():
-        opt['run']['pp_para'] = False
 
     # Check output directory exists
     init_outdir(opt)
@@ -245,7 +245,6 @@ if __name__ == '__main__' or is_jug_running():
 
     # Set up logging
     init_log(opt)
-
     logger.log('info', "Using input file {}".format(input_file))
 
     # Set the ions used in the models
