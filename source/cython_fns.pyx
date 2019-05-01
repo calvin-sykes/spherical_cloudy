@@ -28,55 +28,6 @@ def set_num_threads(int num_threads):
         openmp.omp_set_num_threads(openmp.omp_get_max_threads())
 
 
-def calc_coldens(double[::1] density not None,
-                 double[::1] radius not None,
-                 int nummu):
-    cdef int sz_r
-    cdef int r, ri, mu, rb, fl
-    cdef double rint, rtmp, rtmpc
-
-    sz_r  = radius.shape[0]
-
-    cdef double[:,::1] coldens = np.zeros((sz_r,nummu), dtype=DTYPE)
-    cdef double[::1] muarr = np.linspace(-1.0,1.0,nummu)
-
-    #print "Performing numerical integration over radius"
-    with nogil:
-        for mu in range(0,nummu):
-            for r in range(0,sz_r):
-                # Compute the r integral
-                rint = 0.0
-                rtmpc = radius[r]*csqrt(1.0-muarr[mu]**2)
-                if muarr[mu] >= 0.0:
-                    for ri in range(r,sz_r):
-                        if ri == sz_r-1:
-                            rtmp = radius[ri] + 0.5*(radius[ri]-radius[ri-1])
-                            rint += 0.5*(density[ri-1]-density[ri]) * (csqrt( rtmp**2 - rtmpc**2 ) - csqrt( radius[ri]**2 - rtmpc**2 ))
-                        else:
-                            rint += 0.5*(density[ri+1]+density[ri]) * (csqrt( radius[ri+1]**2 - rtmpc**2 ) - csqrt( radius[ri]**2 - rtmpc**2 ))
-                else:
-                    rb = -1
-                    fl = -1
-                    for ri in range(1,sz_r):
-                        if radius[ri] <= rtmpc:
-                            continue
-                        else:
-                            if rb == -1: rb = ri
-                            if ri == sz_r-1:
-                                rtmp = radius[ri] + (radius[ri]-radius[ri-1])
-                                rint += 0.5*(density[ri-1]-density[ri]) * (csqrt( rtmp**2 - rtmpc**2 ) - csqrt( radius[ri]**2 - rtmpc**2 ))
-                                if fl == -1: rint += 0.5*(density[ri-1]-density[ri]) * (csqrt( rtmp**2 - rtmpc**2 ) - csqrt( radius[ri]**2 - rtmpc**2 ))
-                            else:
-                                rint += 0.5*(density[ri+1]+density[ri]) * (csqrt( radius[ri+1]**2 - rtmpc**2 ) - csqrt( radius[ri]**2 - rtmpc**2 ))
-                                if ri < r:
-                                    fl = 1
-                                    rint += 0.5*(density[ri+1]+density[ri]) * (csqrt( radius[ri+1]**2 - rtmpc**2 ) - csqrt( radius[ri]**2 - rtmpc**2 ))
-                    rint += 2.0 * 0.5*(density[rb]+density[rb-1]) * csqrt( radius[rb]**2 - rtmpc**2 )
-                coldens[r,mu] = rint
-
-    return np.asarray(coldens), np.asarray(muarr)
-
-
 def calc_coldens_allion(double[:,::1] density not None,
                         double[::1] radius not None,
                         int nummu):
@@ -163,7 +114,7 @@ def calc_coldensPP_allion(double[:,::1] density not None,
             rint = 0.0
             for r in range(1,sz_r):
                 rint += 0.5 * (density[ion,sz_r-r] + density[ion,sz_r-r-1]) * (radius[sz_r-r] - radius[sz_r-r-1])
-            coldens[ion, sz_r-r-1] = rint
+                coldens[ion, sz_r-r-1] = rint
     return np.asarray(coldens)
 
 
@@ -189,10 +140,10 @@ def nint_costheta(DTYPE_t[:,:,::1] coldens not None,
         for r in para.prange(0, sz_r):
             for nu in range(0, sz_nu):
                 rint = 0.0
-                for mu in range(0,sz_mu-1):
+                for mu in range(0, sz_mu-1):
                     tau = 0.0
                     taup = 0.0
-                    for ion in range(sz_ion):
+                    for ion in range(0, sz_ion):
                         tau = tau + xsec[ion,nu] * coldens[ion,r,mu]
                         taup = taup + xsec[ion,nu] * coldens[ion,r,mu+1]
                     rint = rint + 0.5 * (cexp(-tau) + cexp(-taup)) * (muarr[mu+1] - muarr[mu])    
@@ -217,38 +168,12 @@ def nint_pp(double[:,::1] coldens not None,
     cdef double[:,::1] retarr = np.zeros((sz_nu,sz_r), dtype=DTYPE)
 
     with nogil:
-        for nu in range(sz_nu):
-            for r in range(0,sz_r):
+        for r in para.prange(0, sz_r):
+            for nu in range(0, sz_nu):
                 tau  = 0.0
                 for ion in range(0,sz_ion):
-                    tau += xsec[ion,nu]*coldens[ion,r]
+                    tau = tau + xsec[ion,nu] * coldens[ion,r]
                 retarr[nu,r] = jzero[nu] * cexp(-tau)
-    return np.asarray(retarr)
-
-
-def phionrate(double[:,::1] jnur not None,
-              double[::1] xsec not None,
-              double[::1] nuarr not None,
-              double planck):
-    """
-    Calculate the local primary photoionization rate (numerically integrate Eq. 23 from Sternberg et al. 2002)
-    """
-    cdef int sz_r, sz_nu
-    cdef int r, nu
-    cdef double nint
-
-    sz_r  = jnur.shape[1]
-    sz_nu = xsec.shape[0]
-
-    cdef double[::1] retarr = np.zeros((sz_r), dtype=DTYPE)
-
-    #print "Performing numerical integration over frequency"
-    with nogil:
-        for r in range(0,sz_r):
-            nint = 0.0
-            for nu in range(0,sz_nu-1):
-                nint += 0.5 * (xsec[nu] * jnur[nu,r] / (planck * nuarr[nu]) + xsec[nu+1] * jnur[nu+1,r] / (planck * nuarr[nu+1])) * (nuarr[nu+1] - nuarr[nu])
-            retarr[r] = nint
     return np.asarray(retarr)
 
 
@@ -746,7 +671,7 @@ def coldensprofile(double[::1] density not None,
     cdef double[::1] retarr = np.zeros((sz_r), dtype=DTYPE)
 
     # This function behaves weirdly with optimisations on
-    # radius[x]**2 - radius[r]**2 valuates nonzero for x == r
+    # radius[x]**2 - radius[r]**2 evaluates nonzero for x == r
     # So this gets special cased to avoid taking sqrt of negative numbers
     with nogil:
         for r in para.prange(0,sz_r):
