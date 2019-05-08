@@ -843,8 +843,8 @@ def get_halo(hmodel, redshift, cosmopar=cosmo.get_cosmo(),
 
     logger.log("info", "Calculating HeII 4686A surface brightness profile")
     HeIIrecomb = recomb.HeII4686_recomb(prof_temperature)
-    HIIIdensity = (densitynH * prim_He) - prof_density[elID["He I"].id] - prof_density[elID["He II"].id]
-    elecprot = HeIIrecomb * electrondensity * HIIdensity # emissivity in photons / cm^3 / s
+    HeIIIdensity = (densitynH * prim_He) - prof_density[elID["He I"].id] - prof_density[elID["He II"].id]
+    elecprot = HeIIrecomb * electrondensity * HeIIIdensity # emissivity in photons / cm^3 / s
     if geom in {"NFW", "Burkert", "Cored"}:
         HeII_SB = (1.0 / (4.0 * np.pi)) * cython_fns.coldensprofile(elecprot, radius)  # photons /cm^2 / s / SR
     elif geom == "PP":
