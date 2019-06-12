@@ -53,7 +53,7 @@ class HeEmissivities:
 
     def get_wavelengths(self):
         """Return a list of the wavelengths for which data was loaded"""
-        return sorted(self.emis_dict.keys())
+        return np.array(sorted(self.emis_dict.keys()))
 
     def get_emis(self, lines, prof_temperature, prof_edens, prof_HeII):
         """
