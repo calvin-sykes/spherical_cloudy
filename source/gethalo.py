@@ -166,6 +166,11 @@ def get_halo(hmodel, redshift, cosmopar=cosmo.get_cosmo(),
     gastemp = options['phys']['gastemp']
     metals  = options['phys']['metals' ]
     Hescale = options['phys']['hescale']
+
+    # Optionally, He scaling can be separately disabled for computing the pressure/density profiles,
+    # and solving for ionisation equilibrium to determine the temperature profile
+    ignore_He_abund_presden = options['phys']['no_hescale_mu']
+    ignore_He_abund_thermeq = options['phys']['no_hescale_teq']
     
     # Begin the timer
     timeA = time.time()
@@ -466,21 +471,25 @@ def get_halo(hmodel, redshift, cosmopar=cosmo.get_cosmo(),
             istore = 0
 
         # Calculate the pressure profile
-        dof = (2.0 - Yprofs[elID["H I"].id]) + prim_He * (3.0 - 2.0 * Yprofs[elID["He I"].id] - 1.0 * Yprofs[elID["He II"].id])
-        masspp = (1.0 + 4.0 * prim_He) / dof
+        if ignore_He_abund_presden:
+            use_prim_He = 0.0833
+        else:
+            use_prim_He = prim_He
+        dof = (2.0 - Yprofs[elID["H I"].id]) + use_prim_He * (3.0 - 2.0 * Yprofs[elID["He I"].id] - 1.0 * Yprofs[elID["He II"].id])
+        masspp = (1.0 + 4.0 * use_prim_He) / dof
         if geom in {"NFW", "Burkert", "Cored"}:
             logger.log("debug", "Calculating total gas mass")
-            fgas = cython_fns.fgasx(densitym,radius,hmodel.rscale)
+            fgas = cython_fns.fgasx(densitym, radius, hmodel.rscale)
             logger.log("debug", "Calculating pressure profile")
             prof_pressure = cython_fns.pressure(prof_temperature, radius, masspp, hmodel, bturb, Gcons, kB, protmss)
-            turb_pressure = 0.75*densitym*(bturb**2.0)
+            turb_pressure = 0.75 * densitym * (bturb**2.0)
              # Calculate the thermal pressure, and ensure positivity
-            ther_pressure = prof_pressure-turb_pressure
-            wther = np.where(ther_pressure<0.0)
+            ther_pressure = prof_pressure - turb_pressure
+            wther = np.where(ther_pressure < 0.0)
             ther_pressure[wther] = 0.0
             # Calculate gas density profile
             temp_densitynH = ther_pressure / (1.5 * kB * prof_temperature * dof)
-            if (temp_densitynH[0]==0.0):
+            if (temp_densitynH[0] == 0.0):
                 logger.log("WARNING", "Central density is zero, assuming no turbulent pressure for this iteration")
                 temp_densitynH = prof_pressure / (1.5 * kB * prof_temperature * dof)
             temp_densitynH /= temp_densitynH[0]
@@ -492,9 +501,9 @@ def get_halo(hmodel, redshift, cosmopar=cosmo.get_cosmo(),
                 # constrain central density by requiring total mass
                 # to match that obtained from the baryon fraction data
                 rintegral = cython_fns.mass_integral(temp_densitynH, radius, hmodel.rvir)
-                dens_scale = barymass / (4.0 * np.pi * protmss * (1.0 + 4.0 * prim_He) * rintegral)
+                dens_scale = barymass / (4.0 * np.pi * protmss * (1.0 + 4.0 * use_prim_He) * rintegral)
             densitynH = dens_scale * temp_densitynH
-            densitym  = densitynH * protmss * (1.0 + 4.0 * prim_He)
+            densitym  = densitynH * protmss * (1.0 + 4.0 * use_prim_He)
 
         # Update the volume density of the unionized species
         for j in range(nions):
@@ -712,24 +721,39 @@ def get_halo(hmodel, redshift, cosmopar=cosmo.get_cosmo(),
             ionlvl = np.zeros(nions, dtype=np.float)
             for j in range(nions):
                 ionlvl[j] = elID[ions[j]].ip * elvolt / planck
-                # Photoionization heating
+
+            # Photoionization heating
             prof_eps = 4.0 * np.pi * cython_fns.phheatrate_allion(jnurarr, phelxs, nuzero, ionlvl, planck)
             prof_phionheatrate = np.zeros(npts,dtype=np.float)
+
             for j in range(nions):
-                prof_phionheatrate += prof_eps[j] * densitynH * elID[ions[j]].abund * Yprofs[j]
+                if ignore_He_abund_thermeq and 'He' in ions[j]:
+                        use_abund = 0.0833
+                else:
+                    use_abund = elID[ions[j]].abund
+                prof_phionheatrate += prof_eps[j] * densitynH * use_abund * Yprofs[j]
+
             # Secondary electron photoheating rate (Shull & van Steenberg 1985)
-            heat_HI  = 4.0*np.pi * cython_fns.scdryheatrate(jnurarr, nuzero, phelxs[elID["H I"].id], electrondensity / (densitynH * (1.0 + 2.0 * prim_He)),
-                                                            elID["H I"].ip, elID["D I"].ip, elID["He I"].ip, planck, elvolt, 0)
-            heat_HeI = 4.0*np.pi * cython_fns.scdryheatrate(jnurarr, nuzero, phelxs[elID["He I"].id], electrondensity / (densitynH * (1.0+2.0 * prim_He)),
-                                                            elID["H I"].ip, elID["D I"].ip, elID["He I"].ip, planck, elvolt, 2)
-            scdry_heat_rate = heat_HI * densitynH * Yprofs[elID["H I"].id] + heat_HeI * densitynH * prim_He * Yprofs[elID["He I"].id]
+            if ignore_He_abund_thermeq:
+                use_prim_He = 0.0833
+                use_electrondensity = densitynH * ((1.0 - Yprofs[elID["H I"].id]) +
+                                                   use_prim_He * Yprofs[elID["He II"].id] +
+                                                   2.0 * use_prim_He * (1.0 - Yprofs[elID["He I"].id] - Yprofs[elID["He II"].id]))
+            else:
+                use_prim_He = prim_He
+                use_electrondensity = electrondensity
+            heat_HI  = 4.0 * np.pi * cython_fns.scdryheatrate(jnurarr, nuzero, phelxs[elID["H I"].id], use_electrondensity / (densitynH * (1.0 + 2.0 * use_prim_He)),
+                                                              elID["H I"].ip, elID["D I"].ip, elID["He I"].ip, planck, elvolt, 0)
+            heat_HeI = 4.0 * np.pi * cython_fns.scdryheatrate(jnurarr, nuzero, phelxs[elID["He I"].id], use_electrondensity / (densitynH * (1.0 + 2.0 * use_prim_He)),
+                                                              elID["H I"].ip, elID["D I"].ip, elID["He I"].ip, planck, elvolt, 2)
+            scdry_heat_rate = heat_HI * densitynH * Yprofs[elID["H I"].id] + heat_HeI * densitynH * use_prim_He * Yprofs[elID["He I"].id]
 
             # Finally, the total heating rate is:
             total_heat = prof_phionheatrate + scdry_heat_rate
 
             logger.log("debug", "Calculating cooling rate")
             # cooling rate evaluated at range of temperatures [rad_coord, temp_coord]
-            total_cool = cython_fns.cool_rate(total_heat, electrondensity, densitynH, Yprofs[elID["H I"].id], Yprofs[elID["He I"].id], Yprofs[elID["He II"].id], prim_He, redshift)
+            total_cool = cython_fns.cool_rate(total_heat, use_electrondensity, densitynH, Yprofs[elID["H I"].id], Yprofs[elID["He I"].id], Yprofs[elID["He II"].id], use_prim_He, redshift)
 
         logger.log("debug", "Deriving the temperature profile")
         old_temperature = prof_temperature.copy()

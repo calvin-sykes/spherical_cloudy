@@ -15,7 +15,7 @@ for str_opt in ['geometry:profile', 'geometry:concrel', 'UVB:spectrum', 'phys:te
 for flt_opt in ['geometry:scale', 'geometry:acore', 'UVB:scale', 'UVB:slope', 'run:concrit', 'phys:gastemp', 'phys:metals', 'phys:bturb',
                 'phys:hescale']:
     option_types[flt_opt] = float
-for bool_opt in ['phys:ext_press', 'run:pp_para', 'run:lv_plot',
+for bool_opt in ['phys:ext_press', 'phys:no_hescale_mu', 'phys:no_hescale_teq', 'run:pp_para', 'run:lv_plot',
                  'save:rates', 'save:heat_cool', 'save:recomb', 'save:intensity']:
     option_types[bool_opt] = lambda s: s.upper() == 'TRUE'
 
@@ -86,9 +86,10 @@ def default(save=False):
     physpar['bturb'  ] = 0.0        # Value of turbulent Doppler parameter in km/s
     physpar['metals' ] = 1.0E-3     # metallicity relative to solar
     physpar['gastemp'] = 20000      # initial gas temperature in Kelvin
-    physpar['hescale'] = 1.0        # Constant to scale the helium mass fraction Y by
-                                    # Internally, a new value of the number abundance is calculated: y = (Y_P * Hescale) / (4 - 4 * Y_P * Hescale)
+    physpar['hescale'] = 1.0        # Constant to scale the helium number abundance y by
                                     # Default value of 1 gives primordial values y_P = 0.083, Y_P = 0.25
+    physpar['no_hescale_mu'] = False  # Don't take Hescale into account to determine the mass per particle (and hence the pressure+density profile)
+    physpar['no_hescale_teq'] = False # Don't take Hescale into account to determine the thermal equilibrium temperature
     options['phys'   ] = physpar
 
     # Set grid of parameters
