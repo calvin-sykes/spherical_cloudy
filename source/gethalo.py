@@ -532,8 +532,8 @@ def get_halo(hmodel, redshift, cosmopar=cosmo.get_cosmo(),
         logger.log("debug", "Calculating phionization rates")
         prof_phionrate = 4.0 * np.pi * cython_fns.phionrate_allion(jnurarr, phelxs, nuzero, planck)
 
+        prof_colionrate = np.zeros((nions,npts))
         # Calculate the collisional ionization rate coefficients
-        prof_colion = np.zeros((nions,npts))
         for j in range(nions):
             if usecolion == "Dere2007":
                 ratev = colioniz.rate_function_Dere2007(prof_temperature * kB / elvolt, colioncoeff[ions[j]])
@@ -541,12 +541,8 @@ def get_halo(hmodel, redshift, cosmopar=cosmo.get_cosmo(),
                 ratev = colioniz.rate_function_arr(prof_temperature * kB / elvolt, colioncoeff[ions[j]])
             elif usecolion == "Chianti":
                 ratev = colioniz.rate_function_Chianti(prof_temperature * kB / elvolt, colioncoeff[ions[j]], coliontemp)
-            prof_colion[j] = ratev.copy()
-
-        # Calculate collisional ionisation rates
-        prof_colionrate = np.zeros((nions,npts))
-        for j in range(nions):
-            prof_colionrate[j] = prof_colion[j] * electrondensity
+            # and now the rates
+            prof_colionrate[j] = ratev.copy() * electrondensity
 
         # the secondary photoelectron collisional ionization rates (probably not important for metals -- Section II, Shull & van Steenberg (1985))
         logger.log("debug", "Integrate over frequency to get secondary photoelectron ionization")
@@ -671,7 +667,7 @@ def get_halo(hmodel, redshift, cosmopar=cosmo.get_cosmo(),
             prof_scdryrate[elID["He I"].id] = 40.0 * np.pi * cython_fns.scdryrate(*scdry_args, flip=2)
 
             # Colion
-            prof_colion = np.zeros((nions,npts))
+            prof_colionrate = np.zeros((nions,npts))
             for j in range(nions):
                 if usecolion == "Dere2007":
                     ratev = colioniz.rate_function_Dere2007(prof_temperature * kB / elvolt, colioncoeff[ions[j]])
@@ -679,12 +675,7 @@ def get_halo(hmodel, redshift, cosmopar=cosmo.get_cosmo(),
                     ratev = colioniz.rate_function_arr(prof_temperature * kB / elvolt, colioncoeff[ions[j]])
                 elif usecolion == "Chianti":
                     ratev = colioniz.rate_function_Chianti(prof_temperature * kB / elvolt, colioncoeff[ions[j]], coliontemp)
-                prof_colion[j] = ratev.copy()
-
-            # Calculate collisional ionisation rates
-            prof_colionrate = np.zeros((nions,npts))
-            for j in range(nions):
-                prof_colionrate[j] = prof_colion[j] * electrondensity
+                prof_colionrate[j] = ratev.copy() * electrondensity
 
             # Other
             for j in range(nions):
