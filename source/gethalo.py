@@ -744,7 +744,7 @@ def get_halo(hmodel, redshift, cosmopar=cosmo.get_cosmo(),
 
             logger.log("debug", "Calculating cooling rate")
             # cooling rate evaluated at range of temperatures [rad_coord, temp_coord]
-            total_cool = cython_fns.cool_rate(total_heat, use_electrondensity, densitynH, Yprofs[elID["H I"].id], Yprofs[elID["He I"].id], Yprofs[elID["He II"].id], use_prim_He, redshift)
+            total_cool = cython_fns.cool_rate(use_electrondensity, densitynH, Yprofs[elID["H I"].id], Yprofs[elID["He I"].id], Yprofs[elID["He II"].id], use_prim_He, redshift)
 
         logger.log("debug", "Deriving the temperature profile")
         old_temperature = prof_temperature.copy()

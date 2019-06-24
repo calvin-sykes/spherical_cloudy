@@ -394,8 +394,7 @@ def scdryheatrate(double[:,::1] jnur not None,
     return np.asarray(retarr)
 
 
-def cool_rate(double[::1] total_heat not None,
-              double[::1] edensity not None,
+def cool_rate(double[::1] edensity not None,
               double[::1] densitynH not None,
               double[::1] prof_YHI not None,
               double[::1] prof_YHeI not None,
@@ -410,7 +409,7 @@ def cool_rate(double[::1] total_heat not None,
     cdef double cool_rec_HII, cool_rec_HeII, cool_rec_HeIII, cool_rec
     cdef double cool_diel, gf, cool_brem, cool_comp, total_cool
 
-    sz_r  = total_heat.shape[0]
+    sz_r  = densitynH.shape[0]
 
     cdef int sz_c = 1000
     cdef double[::1] temp = np.logspace(3.0,6.0,sz_c)
