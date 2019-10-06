@@ -141,14 +141,14 @@ class LivePlot:
             logger.log('warning', "No live figures to show")
 
     def close(self):
-        for name, fig in self.figures.iteritems():
+        for name, fig in self.figures.items():
             plt.close(fig)
-            del self.figures[name]
+        self.figures.clear()
         plt.ioff()
 
 
 def get_halo(hmodel, redshift, cosmopar=cosmo.get_cosmo(),
-             ions=["H I", "He I", "He II"], prevfile=None, options=None):
+             ions=["H I", "He I", "He II"], prevfile=None, options=None, prefix=None):
     """
     hmodel    : The halo model which defines the geometry
     redshift  : The redshift to evaluate the UVB and background density at
@@ -238,7 +238,7 @@ def get_halo(hmodel, redshift, cosmopar=cosmo.get_cosmo(),
     # You can create plots that will update asynchronously while the code runs
     # To use this, set options[run][lv_plot] = True in the options file
     # Then write a function which takes a matplotlib Axis object and performs the desired plotting commands
-    # To show the plot, use the live_plot.show() function, which takes a name identifier and the plotting function
+    # To show the plot, use the live_plot.draw() function, which takes a name identifier and the plotting function
     if lv_plot:
         live_plot = LivePlot()
 
@@ -383,8 +383,18 @@ def get_halo(hmodel, redshift, cosmopar=cosmo.get_cosmo(),
     # this is used as an initial solution to speed up convergence
     if prevfile is not None:
         if geom in {"NFW", "Burkert", "Cored"}:
-            logger.log("info", "Loading file {0:s}".format(prevfile))
-            tdata = np.load(prevfile)
+            if prefix is None:
+                logger.log("info", "Loading file {0:s}".format(prevfile))
+                tdata = np.load(prevfile)
+            else:
+                lastsl = prevfile.rfind('/')
+                pdir, pf = prevfile[:lastsl+1], prevfile[lastsl+1:]
+
+                logger.log("info", "Loading file {0:s}".format(pdir + prefix + pf))
+                try:
+                    tdata = np.load(pdir + prefix + pf)
+                except IOError:
+                    tdata = np.load(prevfile)
             prof_coldens = np.zeros((nions,npts,nummu))
             prof_density = np.zeros((nions,npts))
             Yprofs = np.zeros((nions,npts))
@@ -799,16 +809,25 @@ def get_halo(hmodel, redshift, cosmopar=cosmo.get_cosmo(),
 
         prof_temperature = 0.7 * prof_temperature + 0.3 * old_temperature
 
-        if iteration >= 100: #and iteration%1 == 0:
+        if iteration >= options['run']['maxiter']: #and iteration%1 == 0:
             logger.log("info", "Averaging the stored Yprofs")
             Yprofs = np.mean(store_Yprofs, axis=2)
 
-        if lv_plot:
-            live_plot.show()
-            
-        tstcrit = ((np.abs((old_Yprofs - Yprofs) / Yprofs) < concrit) | (Yprofs == 0.0)).astype(np.int).sum(axis=1)
+        tstcrit = ((np.abs((old_Yprofs - Yprofs) / Yprofs) < concrit) | (Yprofs < concrit)).astype(np.int).sum(axis=1)
         if np.array_equal(tstcrit, allionpnt):
             break
+
+        if lv_plot:
+            def plot_conv(ax):
+                #ax.plot(np.tile(np.log10(radius[1:] * cmtopc), (4,1)).T, Yprofs[:,1:].T, marker='o', label='curr')
+                #ax.plot(np.tile(np.log10(radius[1:] * cmtopc), (4,1)).T, old_Yprofs[:,1:].T, marker='o', label='prev')
+                #ax2 = ax.twinx()
+                ax.plot(np.tile(np.log10(radius[1:] * cmtopc), (4,1)).T, np.log10(np.abs(old_Yprofs - Yprofs) / Yprofs)[:,1:].T)
+                ax.legend()
+                #ax.set_xlim(3.04, 3.06)
+                #ax.set_ylim(0.0, 0.003)
+                #ax2.set_ylim(-4, -1)
+            live_plot.draw('conv', plot_conv)
 
         logger.log("debug", "STATISTICS --")
         logger.log("debug", "ION  INDEX   OLD VALUE    NEW VALUE   |OLD-NEW|")
@@ -820,18 +839,20 @@ def get_halo(hmodel, redshift, cosmopar=cosmo.get_cosmo(),
                                                        Yprofs[j,w_maxoff[j]],
                                                        np.abs((old_Yprofs[j,w_maxoff[j]] - Yprofs[j,w_maxoff[j]]) / Yprofs[j,w_maxoff[j]])))
 
+        if lv_plot:
+            live_plot.show()
+
         # Check if the stopping criteria were met
         if iteration > maxiter:
             logger.log("warning", "Break outer loop at maxiter={0:d} iterations, STATUS:".format(maxiter))
             break
     ## END MAIN LOOP
-
+    
     # Calculate the density profiles
     logger.log("info", "Calculating volume density profiles")
     for j in range(nions):
         # density of this specie = unionized fraction * H volume density * number abundance relative to H
         prof_density[j] = Yprofs[j] * densitynH * elID[ions[j]].abund
-        logger.log("info", "{} {} {}".format(ions[j], np.max(Yprofs[j]), np.max(prof_density[j])))
 
     logger.log("info", "Calculating column density profiles")
     prof_coldens = np.zeros_like(prof_density)
@@ -844,6 +865,10 @@ def get_halo(hmodel, redshift, cosmopar=cosmo.get_cosmo(),
             coldens = cython_fns.calc_coldensPP(prof_density[j], radius)
             prof_coldens[j] = coldens.copy()
 
+    logger.log("info", "ion\tYmax\tnmax\tNmax")
+    for j in range(nions):
+        logger.log("info", "{}\t{:.2g}\t{:.2g}\t{:.4g}".format(ions[j], np.max(Yprofs[j]), np.max(prof_density[j]), np.max(prof_coldens[j])))
+        
     logger.log("info", "Calculating Ha surface brightness profile")
     Harecomb = recomb.Ha_recomb(prof_temperature)
     HIIdensity = densitynH - prof_density[elID["H I"].id]
@@ -900,7 +925,10 @@ def get_halo(hmodel, redshift, cosmopar=cosmo.get_cosmo(),
                       ('cden', 'float64', nions),
                       ('yprf', 'float64', nions)]
         save_pressure = kB * densitynH * prof_temperature / masspp # want pressure in physical units
-        mstring = mangle_string("{0:3.3f}".format(np.log10(hmodel.mvir / somtog)))
+        if prefix is None:
+            mstring = mangle_string("{0:3.3f}".format(np.log10(hmodel.mvir / somtog)))
+        else:
+            mstring = mangle_string("{0:3.6f}".format(np.log10(hmodel.mvir / somtog)))
         cstring = mangle_string("{0:3.3f}".format(hmodel.rvir / hmodel.rscale))
         rstring = mangle_string("{0:3.2f}".format(redshift))
         bstring = mangle_string("{0:+3.3f}".format(np.log10(hmodel.baryfrac)))
@@ -912,7 +940,6 @@ def get_halo(hmodel, redshift, cosmopar=cosmo.get_cosmo(),
             hstring = options["UVB"]["spectrum"]
         outfname = out_dir + ("{0:s}_mass{1:s}_concentration{2:s}_redshift{3:s}_baryscl{4:s}_{5:s}_{6:d}-{7:d}"
                               .format(geom,mstring,cstring,rstring,bstring,hstring,npts,nummu))
-        logger.log("info", "Saving file {0:s}.npy".format(outfname))
         tmpout = np.concatenate((radius.reshape((npts,1)) * cmtopc,
                                  prof_temperature.reshape((npts,1)),
                                  densitynH.reshape((npts,1)),
@@ -1004,13 +1031,27 @@ def get_halo(hmodel, redshift, cosmopar=cosmo.get_cosmo(),
     assert np.dtype(save_dtype).itemsize == tmpout.itemsize * tmpout.shape[1]
     tmpout = np.ascontiguousarray(tmpout)
     tmpout.dtype = save_dtype
-    np.save(outfname, tmpout) 
+    if prefix is None:
+        logger.log("info", "Saving file {0:s}.npy".format(outfname))
+        np.save(outfname, tmpout)
+    else:
+        lastsl = outfname.rfind('/')
+        odir, of = outfname[:lastsl+1], outfname[lastsl+1:]
+        logger.log("info", "Saving file {0:s}.npy".format(odir + prefix + of))
+        np.save(odir + prefix + of, tmpout)
+        outfname = odir + prefix + of
 
     # Stop the program if a large H I column density has already been reached
-    if np.max(np.log10(prof_coldens[elID["H I"].id])) > 24.0:
+    if np.max(np.log10(prof_coldens[elID["H I"].id])) > constants.LOG_COLDENS_MAX:
         print("Terminating after maximum N(H I) has been reached")
         sys.exit()
 
+    # If we exceed the column density target value, return False
+    # Then the calling code should look at this and the previous iteration's peak N_HI
+    # and linearly interpolate between to choose the mass for the next model
+    if np.max(np.log10(prof_coldens[elID["H I"].id])) > constants.LOG_COLDENS_TARGET:
+        return False, outfname + '.npy'
+
     # Everything is OK
     # Return True, and the output filename to be used as the input to the next iteration    
-    return (True, outfname + '.npy')
+    return True, outfname + '.npy'

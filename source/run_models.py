@@ -1,4 +1,5 @@
 import numpy as np
+import glob
 import os
 import shutil
 import sys
@@ -65,7 +66,7 @@ def init_resume(options, dims):
             divisor = 1
             for j in range(0, i):
                 divisor *= dims[j]
-                print(j, divisor)
+                #print(j, divisor)
             start_idxs.append((model_idx // divisor) % dims[i])
     return fname, start_idxs
 
@@ -142,20 +143,109 @@ def run_grid(opt, cosmopar, ions, dryrun=False):
         if not dryrun:
             ok, res = gethalo.get_halo(hmodel, redshift[k], cosmopar, ions, prevfile=prev_fname, options=opt)
             if ok == True:
-                # model complete
+                # model complete, keep going
                 prev_fname = res
             else:
-                # something went wrong with the model
-                logger.log('error', res)
-                # move onto next grid
-                # (keep popping elements till mass counter wraps back to 0)
-                while models and (models[-1][3] > l):
-                    models.pop()
+                # column density target reached
+                iterate_cden_target(opt, res, (virialm[l], virialm[l-1], redshift[k], baryscale[j]), prev_fname)
+
         # once a run over increasing halo masses is complete, clear the previous filename
         # if doing subsequent runs varying other parameters, don't want to load this run's output!
         if l == nummvir - 1:
             prev_fname = None
     return
+
+def find_mass(fn):
+    i1 = fn.find('mass')
+    i2 = fn.find('_', i1)
+    return fn[i1+4:i2].replace('d', '.')
+
+def find_cden(fn, idx):
+    return np.log10(np.load(fn)['cden'][...,idx].max())
+
+#import matplotlib.pyplot as plt
+
+from scipy.interpolate import interp1d as int1d
+def iterate_cden_target(opt, res, params, fname_last):
+    # linearly interpolate on achieved column densities to get mass we should run next time
+    fname_this = res
+    mvir_this, mvir_last, redshift, baryscale = params
+    ionidx = ions.index('H I')
+    
+    iter_attempts = sorted(glob.glob(opt['run']['outdir'] + 'iter*'))
+    if len(iter_attempts) < 2:
+        max_cden_last = np.log10(np.load(fname_last)['cden'][...,ionidx].max())
+        max_cden_this = np.log10(np.load(fname_this)['cden'][...,ionidx].max())
+        grad = (mvir_this - mvir_last) / (max_cden_this - max_cden_last)
+        c = mvir_this - grad * max_cden_this
+        mvir_next = grad * constants.LOG_COLDENS_TARGET + c
+        if np.abs(max_cden_last - constants.LOG_COLDENS_TARGET) < np.abs(max_cden_this - constants.LOG_COLDENS_TARGET):
+            #print("swapping")
+            fname_this = fname_last
+    else:
+        masses = np.fromiter(map(find_mass, iter_attempts), dtype=np.float, count=len(iter_attempts))
+        coldens = np.fromiter(map(lambda fn: find_cden(fn, ionidx), iter_attempts), dtype=np.float, count=len(iter_attempts))
+        #mvir_next = np.interp(constants.LOG_COLDENS_TARGET, coldens, masses)
+        mvir_next = int1d(coldens, masses, fill_value='extrapolate')(constants.LOG_COLDENS_TARGET)
+        fname_this = iter_attempts[np.argmin(np.abs(coldens - constants.LOG_COLDENS_TARGET))]
+        #plt.figure()
+        #plt.plot(masses, coldens, 'bo-')
+        #plt.plot(mvir_next, constants.LOG_COLDENS_TARGET, 'rx')
+        #plt.show()
+
+    #print(mvir_last, mvir_this, mvir_next)
+    #print(max_cden_last, max_cden_this)
+
+    logger.log('info', "###########################")
+    logger.log('info', "###########################")
+    logger.log('info', "Iterating to reach target N_HI")
+    logger.log('info', " virialm 10**{:.6f}".format(mvir_next))
+    logger.log('info', "###########################")
+    logger.log('info', "###########################")
+
+    # Load baryon fraction as a function of halo mass
+    halomass, barymass = np.loadtxt('data/baryfrac.dat', unpack=True)
+    baryfracvals = 10.0**barymass / 10.0**halomass
+    baryfrac = np.interp(mvir_next, halomass, baryfracvals)
+
+    # Get some constants needed to define the halo model
+    const  = constants.get()
+    hztos  = const['hztos' ]
+    Gcons  = const['Gcons' ]
+    somtog = const['somtog']
+
+    if opt['geometry']['concrel'] == "Prada":
+        concentration = cosmo.massconc_Prada12(10**mvir_next, cosmopar, redshift)
+    elif opt['geometry']['concrel'] == "Ludlow":
+        concentration = cosmo.massconc_Ludlow16(10**mvir_next, cosmopar, redshift)
+    elif opt['geometry']['concrel'] == "Bose":
+        concentration = cosmo.massconc_Bose16(10**mvir_next, cosmopar, redshift)
+    else:
+        raise ValueError("Unknown concentration relation")
+
+    hubpar = cosmo.hubblepar(redshift, cosmopar)
+    rhocrit = 3.0*(hubpar*hztos)**2/(8.0*np.pi*Gcons)
+    hmodel = halomodel.make_halo(opt['geometry']['profile'],
+                                 10**mvir_next * somtog,
+                                 baryfrac * baryscale,
+                                 rhocrit,
+                                 concentration)
+
+    ok, res = gethalo.get_halo(hmodel, redshift, cosmopar, ions, prevfile=fname_this, options=opt, prefix='iter_')
+    max_cden_next = np.log10(np.load(res)['cden'][...,ionidx].max())
+    if np.abs(max_cden_next - constants.LOG_COLDENS_TARGET) < 0.001:
+        logger.log('info', "GOOD ENOUGH")
+        iter_files = glob.glob(opt['run']['outdir'] + 'iter*.npy')
+        iter_files.remove(res)
+        logger.log('info', "Cleaning up")
+        logger.log('info', "Removing intermediate files:")
+        for f in iter_files:
+            logger.log('info', f)
+            os.remove(f)
+        os.rename(res, res.replace('iter_', ''))
+        sys.exit()
+    else:
+        iterate_cden_target(opt, res, (mvir_next, mvir_this, redshift, baryscale), fname_this)
 
 # PP models don't load each other
 # so they can all be run in parallel

@@ -1,3 +1,6 @@
+LOG_COLDENS_TARGET = 21.0
+LOG_COLDENS_MAX = 24.0
+
 def get():
     # Set the constants to be used throughout the code
     consdict = dict({})

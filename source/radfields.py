@@ -76,7 +76,10 @@ def extra_interp(elID, nu, Jnu):
 
 def HMbackground(elID,redshift=3.0, version='12', alpha_UV=0):
     Jnu, nu, discz = _HM_background_impl(elID, redshift, version, alpha_UV)
-    logger.log("info", "Using HM{1:s} background at z={0:f}".format(discz, version))
+    if alpha_UV == 0:
+        logger.log("info", "Using HM{1:s} background at z={0:f}".format(discz, version))
+    else:
+        logger.log("info", "Using HM{1:s} background at z={0:f} with slope aUV={2:.0f}".format(discz, version, alpha_UV))
     return Jnu, nu
 
 def _HM_background_impl(elID,redshift, version, alpha_UV):
