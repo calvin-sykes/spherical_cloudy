@@ -13,7 +13,7 @@ for str_opt in ['geometry:profile', 'geometry:concrel', 'UVB:spectrum', 'phys:te
                 'grid:virialm', 'grid:redshift', 'grid:baryscale', 'grid:radscale', 'grid:pp_cdens', 'grid:pp_dens', 'save:he_emis']:
     option_types[str_opt] = str
 for flt_opt in ['geometry:scale', 'geometry:acore', 'UVB:scale', 'UVB:slope', 'run:concrit', 'phys:gastemp', 'phys:metals', 'phys:bturb',
-                'phys:hescale']:
+                'phys:hescale', 'grid:cd_target']:
     option_types[flt_opt] = float
 for bool_opt in ['phys:ext_press', 'phys:no_hescale_mu', 'phys:no_hescale_teq', 'run:pp_para', 'run:lv_plot',
                  'save:rates', 'save:heat_cool', 'save:recomb', 'save:intensity']:
@@ -101,6 +101,7 @@ def default(save=False):
     gridpar['radscale' ] = "np.ones(1)" # scaling of UVB intensity
     gridpar['pp_cdens' ] = "np.full(1, 18)" # log of column density depth in slab in cm^-2 (Plane parallel geometry only)
     gridpar['pp_dens'  ] = "np.full(1, -1.0)" # log of H number density in slab in cm^-3 (Plane parallel geometry only)
+    gridpar['cd_target'] = 23.0 # log of HI column density to iterate to
     options['grid'     ] = gridpar
 
     if save:

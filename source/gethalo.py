@@ -813,7 +813,7 @@ def get_halo(hmodel, redshift, cosmopar=cosmo.get_cosmo(),
             logger.log("info", "Averaging the stored Yprofs")
             Yprofs = np.mean(store_Yprofs, axis=2)
 
-        tstcrit = ((np.abs((old_Yprofs - Yprofs) / Yprofs) < concrit) | (Yprofs < concrit)).astype(np.int).sum(axis=1)
+        tstcrit = ((np.abs((old_Yprofs - Yprofs) / Yprofs) < concrit) | (Yprofs == 0.0)).astype(np.int).sum(axis=1)
         if np.array_equal(tstcrit, allionpnt):
             break
 
@@ -1049,7 +1049,7 @@ def get_halo(hmodel, redshift, cosmopar=cosmo.get_cosmo(),
     # If we exceed the column density target value, return False
     # Then the calling code should look at this and the previous iteration's peak N_HI
     # and linearly interpolate between to choose the mass for the next model
-    if np.max(np.log10(prof_coldens[elID["H I"].id])) > constants.LOG_COLDENS_TARGET:
+    if np.max(np.log10(prof_coldens[elID["H I"].id])) > options["grid"]["cd_target"]:
         return False, outfname + '.npy'
 
     # Everything is OK

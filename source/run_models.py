@@ -5,8 +5,11 @@ import shutil
 import sys
 import traceback
 
-from mpi4py import MPI
-from mpi4py.futures import MPIPoolExecutor
+try:
+    from mpi4py import MPI
+    from mpi4py.futures import MPIPoolExecutor
+except ImportError:
+    print("Warning: importing MPI4py failed.\nMPI-parallelised plane parallel runs will fail.")
 
 import halomodel
 import gethalo
@@ -75,6 +78,7 @@ def init_grid(options):
     gridparams = dict({})
     try:
         for param, stmnt in options['grid'].iteritems():
+            if param == 'cd_target': continue
             gridparams[param] = eval(stmnt)
     except:
         logger.log('critical', "Failed to eval grid specification {}".format(stmnt))
@@ -178,19 +182,19 @@ def iterate_cden_target(opt, res, params, fname_last):
         max_cden_this = np.log10(np.load(fname_this)['cden'][...,ionidx].max())
         grad = (mvir_this - mvir_last) / (max_cden_this - max_cden_last)
         c = mvir_this - grad * max_cden_this
-        mvir_next = grad * constants.LOG_COLDENS_TARGET + c
-        if np.abs(max_cden_last - constants.LOG_COLDENS_TARGET) < np.abs(max_cden_this - constants.LOG_COLDENS_TARGET):
+        mvir_next = grad * opt['grid']['cd_target'] + c
+        if np.abs(max_cden_last - opt['grid']['cd_target']) < np.abs(max_cden_this - opt['grid']['cd_target']):
             #print("swapping")
             fname_this = fname_last
     else:
         masses = np.fromiter(map(find_mass, iter_attempts), dtype=np.float, count=len(iter_attempts))
         coldens = np.fromiter(map(lambda fn: find_cden(fn, ionidx), iter_attempts), dtype=np.float, count=len(iter_attempts))
-        #mvir_next = np.interp(constants.LOG_COLDENS_TARGET, coldens, masses)
-        mvir_next = int1d(coldens, masses, fill_value='extrapolate')(constants.LOG_COLDENS_TARGET)
-        fname_this = iter_attempts[np.argmin(np.abs(coldens - constants.LOG_COLDENS_TARGET))]
+        #mvir_next = np.interp(opt['grid']['cd_target'], coldens, masses)
+        mvir_next = int1d(coldens, masses, fill_value='extrapolate')(opt['grid']['cd_target'])
+        fname_this = iter_attempts[np.argmin(np.abs(coldens - opt['grid']['cd_target']))]
         #plt.figure()
         #plt.plot(masses, coldens, 'bo-')
-        #plt.plot(mvir_next, constants.LOG_COLDENS_TARGET, 'rx')
+        #plt.plot(mvir_next, opt['grid']['cd_target'], 'rx')
         #plt.show()
 
     #print(mvir_last, mvir_this, mvir_next)
@@ -233,7 +237,7 @@ def iterate_cden_target(opt, res, params, fname_last):
 
     ok, res = gethalo.get_halo(hmodel, redshift, cosmopar, ions, prevfile=fname_this, options=opt, prefix='iter_')
     max_cden_next = np.log10(np.load(res)['cden'][...,ionidx].max())
-    if np.abs(max_cden_next - constants.LOG_COLDENS_TARGET) < 0.001:
+    if np.abs(max_cden_next - opt['grid']['cd_target']) < 0.001:
         logger.log('info', "GOOD ENOUGH")
         iter_files = glob.glob(opt['run']['outdir'] + 'iter*.npy')
         iter_files.remove(res)
